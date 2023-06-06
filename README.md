@@ -9,5 +9,5 @@
 
 - **DemoDataset_countMatrix.tsv** : This file serves as a demo dataset. The parameters in bulkRNAseq_Script.Rmd are already set to support this dataset.
 
-- **DemoDataset_analysisReport.pdf** : The analysis report that is generated when running bulkRNAseq_Script.Rmd on the demo dataset (here as pdf instead of html for GitHub, but otherwise html is recommended for obtaining interactive plotly figures). Provides a good overview of what the script can do.
+- **DemoDataset_analysisReport.html** : The analysis report that is generated when running bulkRNAseq_Script.Rmd on the demo dataset. Provides a good overview of what the script can do.
 
