@@ -1,14 +1,13 @@
 
 ---
-title: "bulkRNAseq Analysis Demo dataset"
+title: "bulkRNAseq Analysis Demo Dataset"
 author: "Moritz Madern"
-
 output:
-  html_document: 
-    toc: true
-    theme: united
+  html_document:
+    toc: yes
+    df_print: paged
   pdf_document:
-   toc: yes  
+    toc: yes
 ---
 <br><br><br>
 
@@ -38,7 +37,7 @@ This section allows the user to set parameters that are specific to the dataset 
 wd = getwd()
 
 ## specify file path to data input (tab-separated count matrix + some extra columns denoting gene ids and gene names etc.)
-filepath = "./rnaseq_deseq_global_counts_raw.tsv"
+filepath = "./DemoDataset_countMatrix.tsv"
 
 ## specify unique gene id column name
 unique_id = "gene_id"
@@ -897,9 +896,9 @@ if (!is.null(pairwise_comp)){
     neg_log_adj_pval <- -log10(adj_pval)
     x_extreme <- max(abs(range(fc_i)))
     
-    ## make a p-value cap at 10^(-100)
-    neg_log_pval[is.infinite(neg_log_pval)] <- 100
-    neg_log_adj_pval[is.infinite(neg_log_adj_pval)] <- 100
+    ## make a p-value cap at 10^(-50)
+    neg_log_adj_pval[is.infinite(neg_log_adj_pval)] <- 50
+    neg_log_adj_pval[neg_log_adj_pval>50] <- 50
     
     # plot volcano plots (highlighting genes of interest)
     writeLines("Volcano plot highlighting genes of special interest:")
@@ -922,7 +921,8 @@ if (!is.null(pairwise_comp)){
     df_gg <- data.frame(fc = dds_res_shrink_i$log2FoldChange,
                         neg_log_adj_pval = -log10(dds_res_shrink_i$padj))
     df_gg$neg_log_adj_pval[is.na(df_gg$neg_log_adj_pval)] <- 0
-    df_gg$neg_log_adj_pval[is.infinite(df_gg$neg_log_adj_pval)] <- 100
+    df_gg$neg_log_adj_pval[is.infinite(df_gg$neg_log_adj_pval)] <- 50
+    df_gg$neg_log_adj_pval[df_gg$neg_log_adj_pval>50] <- 50
     df_gg$significance <- cut(df_gg$neg_log_adj_pval, breaks=c(Inf, -log10(0.001), -log10(0.01), -log10(0.05), 0), right=FALSE)
     levels(df_gg$significance) <- c("non-significant", "adj. pval < 0.05", "adj. pval < 0.01", "adj. pval < 0.001")
     df_gg$gene_name <- df$gene_name
@@ -1015,7 +1015,7 @@ if (!is.null(pairwise_comp)){
 
 # Pairwise DE Testing: Interactive Volcano Plots 
 
-In this section, the same volcano plots from above are plotted again but as interactive plots in the html output (hover over points to retrieve gene name information!) while also indicating the significant level of each gene. Adjusted p-values are capped at 10^(-100).
+In this section, the same volcano plots from above are plotted again but as interactive plots in the html output (hover over points to retrieve gene name information!) while also indicating the significant level of each gene. Adjusted p-values are capped at 10^(-50).
 
 ```{r print ggplotly volcano plots, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.height=8, fig.width=4}
 
