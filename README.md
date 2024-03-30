@@ -6,7 +6,7 @@ Check out the example report "DemoDataset_FullAnalysisReport.html" to see what t
 ## Contents
 
 
-- **BulkRNAseqAnalysis_from_CountMatrix.Rmd** : R markdown script that performs the analysis based on specified input parameters (see code section "Chosen Parameters" in the Rmd file). Knit to html to obtain an html report of your analysis. The current parameter configuration is set to fully support the demo dataset (see below). 
+- **BulkRNAseqAnalysis_from_CountMatrix.Rmd** : R markdown script that performs the analysis based on specified input parameters (see section "Chosen Parameters" in the Rmd file). Knit to html to obtain an html report of your analysis. The current parameter configuration is set to fully support the demo dataset (see below). 
 
 - **functions.R** : Functions required for the BulkRNAseqAnalysis_from_CountMatrix.Rmd script (sourced automatically if located in the same folder).
 
