@@ -13,9 +13,9 @@ PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL){
   pca_res <- prcomp(t(m))
   rot_mat <- pca_res$rotation
   res_final <- as.matrix(scale(t(m), center=TRUE, scale=FALSE)) %*% rot_mat
-  eigenvectors <- pca_res$sdev^2
-  anteil_var_pca1 <- round(eigenvectors[1]/sum(eigenvectors),digits=3)
-  anteil_var_pca2 <- round(eigenvectors[2]/sum(eigenvectors),digits=3)
+  eigenv <- pca_res$sdev^2
+  fraction_var_pca1 <- round(eigenv[1]/sum(eigenv),digits=3)
+  fraction_var_pca2 <- round(eigenv[2]/sum(eigenv),digits=3)
   
   ## create groups
   groups <- as.factor(groups)
@@ -30,8 +30,8 @@ PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL){
     gg <- ggplot(df_gg) + 
       geom_point(aes(x=PC1, y=PC2, col=groups, text=samplenames),size=5) +
       scale_color_manual(values=legend_colors)+
-      xlab(paste0("PC1  ","(",anteil_var_pca1*100,"%",")")) +
-      ylab(paste0("PC2  ","(",anteil_var_pca2*100,"%",")")) +
+      xlab(paste0("PC1  ","(",fraction_var_pca1*100,"%",")")) +
+      ylab(paste0("PC2  ","(",fraction_var_pca2*100,"%",")")) +
       theme_bw()
   } else {
     df_gg <- as.data.frame(res_final)
@@ -41,8 +41,8 @@ PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL){
     gg <- ggplot(df_gg) + 
       geom_point(aes(x=PC1, y=PC2, col=groups, text=samplenames, shape=batch),size=5) +
       scale_color_manual(values=legend_colors)+
-      xlab(paste0("PC1  ","(",anteil_var_pca1*100,"%",")")) +
-      ylab(paste0("PC2  ","(",anteil_var_pca2*100,"%",")")) +
+      xlab(paste0("PC1  ","(",fraction_var_pca1*100,"%",")")) +
+      ylab(paste0("PC2  ","(",fraction_var_pca2*100,"%",")")) +
       theme_bw()
   }
   

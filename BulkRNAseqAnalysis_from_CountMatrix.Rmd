@@ -1,0 +1,1158 @@
+
+---
+title: "bulkRNAseq Analysis of Demo Dataset"
+author: "Script by Moritz Madern"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  pdf_document:
+    toc: yes
+---
+<br><br><br>
+
+
+```{r Load required packages, echo = FALSE, message = FALSE, warning = FALSE, include=FALSE}
+
+## Load required packages. Note that Bioconductor R packages need to be installed extra (e.g. see https://bioconductor.org/packages/release/bioc/html/DESeq2.html)
+library(biomaRt)
+library(DESeq2)
+library(tidyverse)
+library(RColorBrewer)
+library(dendextend)
+library(gprofiler2)
+library(rlist)
+library(plotly)
+library(reshape2)
+library(gplots)
+library(ashr)
+library(ggrepel)
+library(cowplot)
+library(msigdbr)
+library(clusterProfiler)
+library(viridis)
+library(enrichplot)
+
+```
+<br><br><br>   
+  
+# Chosen Parameters 
+
+This section allows the user to set parameters that are specific to their dataset (e.g., file path to count matrix, sample and group names, desired pairwise group comparisons, etc.). This is the only section of the script that requires any user input/modification. If the script produces errors down the line, it is most likely due to incorrect parameter specifications!
+
+```{r Define parameters, message = FALSE, warning = FALSE}
+
+
+## Specify file path to count matrix input table. Assumed to be a tab-separated count matrix table containing AT LEAST an additional column for ENSEMBL gene ids (see parameter "unique_id" below)
+filepath = "./DemoDataset.txt"
+
+
+## Specify unique gene id column name containing ENSEMBL gene ids (e.g. "ENSMUSG00000051951"). 
+unique_id = "gene_id"
+
+
+## Specify gene name column containing gene symbols (e.g. "Xkr4") if present. If not present, set this parameter to NULL (i.e. gene_name = NULL), and gene names will be extracted based on ENSEMBL gene ids via biomaRt
+gene_name = NULL
+
+
+## Specifiy the column name that indicates whether a gene is protein coding or not, if present. If not present, set this parameter is set to NULL (i.e. biotype_name = NULL), and biotypes will be extracted based on ENSEMBL gene ids via biomaRt
+biotype_name = NULL
+
+
+## Specify count columns regular expression pattern. This regular expression pattern should match the read count column headers. You can test if your pattern is specified correctly via grep(names(df), pattern=count_column_pattern, value=TRUE), which should return the count column headers.
+count_column_pattern = "_S[0-9]*$"
+
+
+## Specify sample names character vector in the order the samples are listed in the count table (and matched by count_column_pattern)
+samplenames = c("KO_effector_10", "KO_effector_11", "KO_effector_12", 
+                "WT_naive_1", "WT_naive_2", "WT_naive_3", 
+                "WT_effector_4", "WT_effector_5", "WT_effector_6", 
+                "KO_naive_7", "KO_naive_8", "KO_naive_9")
+
+
+## Specify group names character vector in the order the samples are listed in the count table (and matched by count_column_pattern). This information is important for differential expression testing.
+groups = rep(c("KO_effector","WT_naive","WT_effector", "KO_naive"), each=3)
+
+
+## Optional: Specify batches as factor in the order the samples are listed in the count table (if present. Else: set to NULL). Batches will be considered in differential expression testing
+batch = NULL
+  
+
+## Optional: Specify sample reordering indices as numerical vector. This parameter reorders samples for visualization purposes, e.g. clustering gene progiles. If not desired, set this parameter to NULL
+reorder = c(4,5,6,10,11,12,7,8,9,1,2,3)
+
+
+## Specify minimum number read counts per gene across all samples. Genes (i.e. rows) with total count below the threshold will be filtered out.
+min_counts_threshold_per_row = 50
+
+
+## Specify minimum number of read counts per cell entry. Genes (i.e. rows) with any entry below the threshold will be filtered out. This filter is a bit strict, but it can help to stabilize within-group gene variances (-> important for the applicability of DESeq's FC shrinkage estimation). This is particularly useful when the data contains a lot of missing value entries ("drop-out events"), which are more common in low input RNA sequencing experiments. Check out the scripts output (more specifically, the volcano plot fold changes) for varying thresholds to see if this filtering improves the data! If you want to be permissive with this filtering (recommended for bulk RNAseq experiments with a lot of cells), just set this filter to 0.
+min_counts_threshold_per_cell = 1
+
+
+## Define number of k-means clusters for clustering 
+k_clusters = 8
+
+
+## Specify if log2 counts should be standardized (i.e. "Z-scored") within each gene for the k-means clustering. If set to FALSE, log2(x+1)-transformed counts will instead "only" be centered to an average of 0, meaning that gene-variances are not fixed at 1.
+standardize_before_clustering = TRUE
+
+
+## Specify if genes should be additionally filtered for overall significance (H0: no difference between groups) before k-means clustering. Recommended if standardize_before_clustering = TRUE
+ANOVA_filter_before_clustering = TRUE
+
+
+## Specify at which ANOVA p-value cutoff the ANOVA_filter_for_clustering should be applied. Gnenes that do not pass this treshold (i.e. have a lower p-value) will not be used in the k-means clustering
+adj.pval_cutoff = 0.01
+
+
+## Specify if overrepresentation analysis (ORA) enrichment analys susing gProfiler on k-means clusters should be performed; and if gene set enrichment analysis (GSEA) on differential expression testing results should be performed.
+enrichment_analysis = TRUE
+
+
+## For ORA enrichment analysis of clusters via gprofiler, deifine if a custom background should be used (from a statistical standpoint, I recommend this as it prevents bias). The custom background is defined as all genes quantified in the experiment.
+custom_background = TRUE
+
+
+## Define organism for ORA and GSEA enrichment analysis (note: specify "mmusculus" for mouse, and "hsapiens" for human). The script currently only supports mouse and human; but it can be manually adapted to any handle any other organism.
+organism = "mmusculus"
+
+
+## Specify biomaRt mirror. Sometimes the chosen mirror (even the default option) produces errors. You can set this parameter to "useast", "asia" and "www".
+biomart_mirror = "useast"
+
+
+## Specify which pairwise group comparisons should be made using DESeq2. This parameter should be specified as a list of two-element character vectors which contains groups to be tested against each other. 
+pairwise_comp = list(c("KO_naive", "WT_naive"),
+                     c("WT_effector","WT_naive"),
+                     c("KO_effector", "WT_effector"))
+
+
+## Specify genes of special interest via gene name (i.e. gene symbol). These genes will be highlighted extra in some of the figures.
+genes_of_special_interest = c("Il2", "Il4", "Bcl6", "Gata3", "Rin1", "Rin3", "Rin2", "Cxcr5", "Ifng", "Stat4", "Eif5b", "Foxo1", "Sox12", "Ncor2","Jun", "Rinl", "Fbxo27", "Fbxo17")
+
+
+## Specify whether final data table (containg k-means cluster information and DESeq2 results) should be exported as txt-file
+export_table = TRUE
+
+```
+
+
+```{r Source functions etc, echo = FALSE, message = FALSE, warning = FALSE}
+
+## Specify working directory
+wd = getwd()
+
+
+## Source functions
+source(file="functions.R")
+
+
+## Create output folders
+if (!"clusters" %in% list.files()){
+  dir.create("clusters")
+}
+if (!"ORA" %in% list.files()){
+  dir.create("ORA")
+}
+if (!"GSEA" %in% list.files()){
+  dir.create("GSEA")
+}   
+if (!"figures" %in% list.files()){
+  dir.create("figures")
+}    
+
+
+## Specify the entry name that indicates a protein coding genes in the column "gene_biotype". Only protein-coding genes will be taken into account for enrichment testing
+proteincoding_entry = "protein_coding"
+
+
+## For ORA analysis of clusters via gprofiler, specify the database sources from which annotated gene sets are tested for overrepresentation
+sources_enrichment = c("GO", "REAC", "WP")
+
+
+## For ORA analysis of clusters via gprofiler, deifine if custom background should be used (from a statistical standpoint, I recommend this as it prevents bias)
+custom_background = TRUE
+
+
+## Define adj. pval-threshold for ORA enrichment testing via gProfiler
+pval_threshold_enrichment = 0.05
+
+```
+<br><br><br><br>  
+
+
+
+# Overview and Filtering
+
+```{r Read in data and extract count matrix, echo = FALSE, message = FALSE, warning = FALSE}
+
+## Read in count table
+df <- read.delim(file=filepath, sep="\t", header=TRUE)
+
+
+## Rename unique id column to "gene_id"
+names(df)[names(df) == unique_id] <- "gene_id"
+
+
+## Rename gene name column to "gene_name" if present
+if(!is.null(gene_name)) {names(df)[names(df) == gene_name] <- "gene_name"}
+
+
+## Rename gene biotype column to "gene_name" if present
+if (!is.null(biotype_name)) {names(df)[names(df) == biotype_name] <- "gene_biotype"}
+
+
+## Add biomaRt columns to df (if any are missing)
+add_biomart <- ifelse(test = is.null(gene_name)|is.null(biotype_name), yes=TRUE, no=FALSE)
+if(add_biomart){
+  
+  # extract biomaRt data
+  v_gene_ids <- df[,"gene_id"]
+  v_attributes <- c("ensembl_gene_id", "external_gene_name", "description", "gene_biotype")
+  if (organism == "hsapiens") {dataset = "hsapiens_gene_ensembl"}
+  if (organism == "mmusculus") {dataset = "mmusculus_gene_ensembl"}
+  ensembl <- useEnsembl(biomart = "genes", mirror=biomart_mirror, dataset=dataset)
+  gene_table <- getBM(filters="ensembl_gene_id",
+                      attributes=v_attributes,
+                      values=v_gene_ids,
+                      mart=ensembl)
+  
+  # filter for ensembl IDs that could be annotated via biomaRt. Then reorder and merge
+  df <- df[df$gene_id %in% gene_table$ensembl_gene_id,]
+  df <- df[order(df$gene_id),]
+  gene_table <- gene_table[order(gene_table$ensembl_gene_id),]
+  stopifnot(all(df$gene_id == gene_table$ensembl_gene_id))
+  
+  
+  # merge, then rename "external_gene_name" to "gene_name"
+  df <- cbind(df,gene_table[,2:4])
+  names(df)[names(df) == "external_gene_name"] <- "gene_name"
+}
+
+
+## Extract count data as matrix, add unique variable as rownames to count matrix, change column names to samplenames
+bool_count_columns <- grepl(names(df), pattern=count_column_pattern)
+m_counts <- as.matrix(df[,bool_count_columns])
+writeLines("Overview of data:")
+if (is.null(batch)){
+  data.frame(column_names = colnames(m_counts), samplenames=samplenames, groups=groups)
+} else {
+  data.frame(column_names = colnames(m_counts), samplenames=samplenames, groups=groups, batch=batch)
+}
+rownames(m_counts) <- df$gene_id
+colnames(m_counts) <- samplenames
+
+
+
+## Filter out rows (genes) that do not pass the minimum counts threshold per row:
+writeLines(paste0("Number of genes before filtering for at least ", min_counts_threshold_per_row, " counts per gene across all samples: ", nrow(m_counts)))
+m_counts[is.na(m_counts)] <- 0
+bool_keep <- rowSums(m_counts, na.rm=TRUE) > min_counts_threshold_per_row
+df <- df[bool_keep,]
+m_counts <- m_counts[bool_keep,]
+writeLines(paste0("Number of genes after filtering for at least ", min_counts_threshold_per_row, " counts per gene across all samples: ", nrow(m_counts)))
+
+
+## Filter out rows (genes) that do not pass the minimum counts threshold per entry:
+writeLines(paste0("Number of genes before filtering for at least ", min_counts_threshold_per_cell, " count(s) per entry: ", nrow(m_counts)))
+m_counts[is.na(m_counts)] <- 0
+m_bool <- m_counts < min_counts_threshold_per_cell 
+bool_kick <- apply(m_bool, FUN=any, MARGIN = 1)
+df <- df[!bool_kick,]
+m_counts <- m_counts[!bool_kick,]
+writeLines(paste0("Number of genes after filtering for at least ", min_counts_threshold_per_cell, " count(s) per entry: ", nrow(m_counts)))
+
+
+## Remove unwanted objects
+rm(list=c("ensembl", "gene_table", "biomart_mirror", "dataset", "gene_name", "biotype_name", "v_attributes", "v_gene_ids", "unique_id", "add_biomart", "m_bool", "bool_keep", "bool_count_columns"))
+
+```
+
+
+```{r Define some more relevant variables etc, echo = FALSE, message = FALSE, warning = FALSE}
+
+## Specify some variables
+k <- ncol(m_counts)  ## number of samples
+m <- length(unique(groups))  ## number of groups
+colors_groups <- setNames(brewer.pal(m, "Pastel1"), nm=unique(groups))
+bool_kick <- is.na(names(colors_groups))
+colors_groups <- colors_groups[!bool_kick]
+
+
+## Give a unique color to each gene
+f_genes <- colorRampPalette(c("darkslateblue","blue","red","darkorchid","aquamarine","lightgreen","navy","turquoise","forestgreen","skyblue","plum","dodgerblue2","darkseagreen2", "cadetblue4", "chocolate", "bisque", "gold", "deeppink", "dodgerblue4", "indianred4", "indianred1", "lightsalmon1", "midnightblue", "mediumblue", "orange1", "mediumpurple3", "red3", "rosybrown2", "turquoise2", "wheat2", "slateblue2", "royalblue2", "purple2", "deeppink4", "firebrick", "coral", "tomato2", "#ff073a", "#06ffcb", "#00725a", "#610043", "#0024c3","#c30024", "#e94b3c", "#e94b3c", "#9becf3", "#9af3cd", "#cc9af2", "#d9a583", "#F0C013"))
+col_genes <- sample(f_genes(length(df$gene_id)))
+names(col_genes) <- df$gene_id
+df$col_genes <- col_genes
+
+
+## Extract gene id for defined genes of interest (see parameter section)
+gene_id_genesOfInterest <- df$gene_id[df$gene_name %in% genes_of_special_interest]
+
+
+## Define enrichment_filepath
+enrichment_filepath <- paste0(wd, "/ORA")
+
+
+## Remove unwanted objects
+rm(list=c("bool_kick"))
+
+```
+
+<br><br><br><br>   
+
+
+
+# Between-Sample Data Normalization
+
+Between-sample normalization is performed using DESeq's estimateSizeFactors function which estimates sample-wise scaling factors that best align each sample to each other sample. First, the unnormalized input data is visualized:
+
+```{r Unnormalized counts, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center"}
+
+## WriteLines for html output
+writeLines("Barplot and boxplot for unnormalized data:")
+
+
+## Plot Barplot of total unnormalized counts
+par(mar=c(8,4,4,2))
+barplot(colSums(m_counts, na.rm=TRUE),las=2,main ="Total Counts (before normalization) ",border=colors_groups[groups], names.arg=samplenames, cex.names=0.7, cex.main=1, yaxt="n")
+axis(side=2, cex.axis=0.7, mgp=c(0,0.7,0), las=2, lwd.ticks=0.5)
+
+
+## Plot Boxplots of unnormalized counts (log2 transformed)
+par(mar=c(8,4,4,2))
+boxplot(log2(m_counts+1),las=2,main="Boxplots (before normalization)",border=colors_groups[groups],xaxt="n",yaxt="n",ylab="log2 counts", lwd=1.5, cex.main=1)
+axis(side=1, at= 1:length(samplenames),las=2, labels=samplenames, cex.axis = 0.75)
+axis(side=2)
+
+```
+
+Next, the normalized data (to be used in all subsequent analysis steps) is visualized:
+
+```{r Read in as DESeqDataset and estimate model, echo = FALSE, message = FALSE, warning = FALSE}
+
+## Create colData and dds object. Differentiate between design with and without batch effects
+if(is.null(batch)){
+  colData <- data.frame(data.frame(group = groups))
+  rownames(colData) <- samplenames
+  dds <- DESeqDataSetFromMatrix(countData = m_counts,
+                                colData = colData,
+                                design = ~ group)
+  } else {
+  colData <- data.frame(data.frame(batch=batch, group = groups))
+  rownames(colData) <- samplenames
+  dds <- DESeqDataSetFromMatrix(countData = m_counts,
+                                colData = colData,
+                                design = ~ batch + group)
+}
+
+
+## Calculate default DESeq model
+dds_res <- DESeq(dds)
+
+```
+
+
+```{r Check DeSeq normalization (size factor normalization), echo = FALSE, message = FALSE, warning = FALSE, fig.align="center"}
+
+## WriteLines for html output
+writeLines("Barplot and boxplot after between-sample normalization:")
+
+
+## Extract normalized counts, add them to df, and do QC
+m_counts_norm <- counts(dds_res, normalized=TRUE)
+df_m_counts_norm <- as.data.frame(m_counts_norm)
+names(df_m_counts_norm) <- paste0("normalized_", names(df_m_counts_norm))
+df <- cbind(df, df_m_counts_norm)
+
+
+## Plot Barplot of total unnormalized counts
+par(mar=c(8,4,4,2))
+barplot(colSums(m_counts_norm, na.rm=TRUE),las=2,main ="Total Counts (normalized) ",border=colors_groups[groups], names.arg=samplenames, cex.names=0.7, cex.main=1, yaxt="n")
+axis(side=2, cex.axis=0.7, mgp=c(0,0.7,0), las=2, lwd.ticks=0.5)
+
+
+## Plot Boxplots of unnormalized counts (log2 transformed)
+par(mar=c(8,4,4,2))
+boxplot(log2(m_counts_norm+1),las=2,main="Boxplots (normalized) ",border=colors_groups[groups],xaxt="n",yaxt="n",ylab="log2 counts", lwd=1.5, cex.main=1)
+axis(side=1, at= 1:length(samplenames),las=2, labels=samplenames, cex.axis = 0.75)
+axis(side=2)
+
+
+## Define helper function 
+my_line <- function(x,y,...){
+    range_pairs <- range(log2(m_counts + 1))
+    points(x,y,pch=16, col=rgb(red=200, green=200, blue=200, alpha=50, maxColorValue = 255),
+           xlim=range_pairs,ylim=range_pairs, cex=1)
+    abline(a = 0,b = 1, col="black", lty="dashed")}
+
+
+## Plot pairs plot (max 7vs7)
+writeLines("Pairwise scatterplots of log2-transformed counts (normalized):")
+if (k > 7){
+  ind_rand <- 1:7
+  pairs(log2(m_counts_norm + 1)[,ind_rand], panel=my_line, cex.labels=0.9, oma=c(3,3,5,12), main= "Pairs Plot (normalized)", cex.main=1)
+} else {
+  pairs(log2(m_counts_norm +1), panel=my_line, cex.labels=0.9, oma=c(3,3,5,12), main= "Pairs Plot (normalized)", cex.main=1)
+}
+
+
+## Remove unwanted objects 
+rm(list=c("ind_rand"))
+
+
+```
+If normalized properly, we expect most genes to fall around the dashed line, especially for samples within the same sample group. Note: If there are more than 7 samples in the data, this plot only visualizes the first 7 samples after normalization.
+
+<br><br><br><br>  
+
+
+
+# General Data Visualization
+
+<br>  
+
+This section shows PCA and Heatmaps of the normalized  and log2(x+1)-transformed data. Note that the data is not batch-corrected at this point, meaning that potential batch-effects would therefore be visible here. Also, the PCA plot is interactive in the html output! Hover over points to retrieve sample-specific information.
+
+```{r PCA, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.width=6, fig.height=4, fig.path='figures/'}
+
+## Plot PCA (normalized)
+writeLines("PCA dimension reduction of log2-transformed counts (normalized):")
+PCA_plot(m=log2(m_counts_norm + 1),
+         groups = groups,
+         legend_colors = colors_groups,
+         batch=NULL,
+         plot_path = paste0(wd,"/figures/PCA.pdf"))
+
+```
+
+
+<br>  
+
+```{r Heatmaps, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.width=6, fig.height=6, fig.path='figures/', dev=c('png', 'pdf')}
+
+## Plot heatmap (normalized)
+writeLines("Heatmap of log2-transformed counts (normalized):")
+heatmap_plot(m=log2(m_counts_norm + 1),
+             groups = groups,
+             legend_colors = colors_groups,
+             sample_names = samplenames, 
+             type="normal", dendrogram="column" )
+
+
+## plot heatmap (normalized and centered to each row mean)
+writeLines("Heatmap of 0-centered log2-transformed counts (normalized):")
+m_centered <- sweep(log2(m_counts_norm + 1), FUN= "-", STATS = rowMeans(log2(m_counts_norm + 1)), MARGIN=1)
+heatmap_plot(m=m_centered,
+             groups = groups,
+             legend_colors = colors_groups,
+             sample_names = samplenames,
+             type="centered", dendrogram="column" )
+
+
+## plot heatmap (normalized and standardized/Z-scored)
+writeLines("Heatmap of standardized/Z-scored log2-transformed counts (normalized):")
+m_centered <- sweep(log2(m_counts_norm + 1), FUN= "-", STATS = rowMeans(log2(m_counts_norm + 1)), MARGIN=1 )
+m_standardized <- sweep(m_centered, FUN="/", STATS=apply(m_centered, FUN=sd, MARGIN = 1), MARGIN = 1)
+heatmap_plot(m=m_standardized,
+             groups = groups,
+             legend_colors = colors_groups,
+             sample_names = samplenames,
+             type="standardized", dendrogram="column" )
+
+
+## Remove unwanted objects
+rm(list=c("m_standardized", "m_centered", "m_counts", "colData", "dds_res", "df_m_counts_norm", "f_genes", "my_line",  "PCA_plot", "heatmap_plot"))
+
+```
+
+Note that each of the three heatmaps can highlight a different aspect of the data!
+
+<br><br><br><br>    
+
+
+
+# ANOVA
+
+Here, a simple one-way ANOVA tests for gene-wise differential expression (DE) between all sample groups on the basis of between-sample-normalized and log2(x+1)-transformed gene counts (H0: All groups are equal; H1: At least one group differs from the others). If a batch effect is specified, the ANOVA automatically switches to a 2-way ANOVA and incorporates the batch variable as a covariate into the model. Note that this section is entirely skipped if there are no more than 2 groups overall, or if the minimum number of replicates per group is smaller than 3.
+
+```{r ANOVA, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center"}
+
+## Check requirements for doing ANOVA
+if ( length(unique(groups)) > 2  &  min(table(groups)) > 2 ){
+  
+  # log2, and replace NAs with 0
+  m <- log2(m_counts_norm + 1)
+  m[is.na(m)] <- min(m, na.rm=TRUE)
+  
+  # initiate p-val vector
+  pval <- numeric(nrow(m))
+  
+  # go over each gene and conduct ANOVA. Record p-value
+  for (i in 1:nrow(m)){
+    
+    # extract i'th gene abundance pattern
+    m_i <- m[i,]
+    
+    # calculate F-test 
+    if (is.null(batch)){
+      df_anova_i <- data.frame(Y=m_i,groups=groups)
+      model <- aov(data=df_anova_i, formula=Y~groups)
+      model_summary <-summary(model)
+      pval_i <- model_summary[[1]]$`Pr(>F)`[1]
+    } else {
+      df_anova_i <- data.frame(Y=m_i,groups=groups, batch=batch)
+      model <- aov(data=df_anova_i, formula=Y~groups + batch)
+      model_summary <-summary(model)
+      pval_i <- model_summary[[1]]$`Pr(>F)`[1]
+    }
+  pval[i] <- pval_i  
+  }
+  
+  # save p-value to dataframe
+  df$ANOVA_pval <- pval
+  
+  ## save adj. o-value to dataframe
+  df$ANOVA_adj.pval <- p.adjust(pval, method = "BH")
+  
+  # plot p-value histogram
+  writeLines("plotting ANOVA p-value histogram:")
+  hist(df$ANOVA_pval, breaks=20, border="grey", col="grey", xaxt="n", yaxt="n", main="", ylab="", xlab="")
+  axis(side=2,cex.axis=0.9)
+  axis(side=1, at= seq(0,1,by=0.2), cex.axis=0.9)
+  title(main="", cex.main=0.9, cex.lab=0.9, ylab="frequency", xlab="ANOVA p-value")
+}
+
+
+## Remove unwanted objects
+rm(list=c("df_anova_i", "pval", "m_i", "pval_i", "model", "model_summary", "m"))
+
+
+```
+
+The histogram bar on the very left reflects p-values < 0.05. Note that per definition, p-values are uniformly distributed if the null hypothesis is true (this applies to any statistical test if the required assumptions for the test are also met). Hence, looking at p-value histograms can be quite informative!
+
+
+<br><br><br><br>   
+
+
+
+
+
+
+
+# k-Means Clustering: Overview
+
+In this section, k-means clustering is performed on between-sample-normalized and log2(x+1)-transformed gene-wise transcript abundance profiles to find gene co-expression clusters. Depending on how the parameter "standardize_before_clustering" is specified, the gene-wise quantitative data will be centered at mean 0 (if set to FALSE), or standardized/Z-scored (if set to TRUE) prior to k-means clustering. 
+
+If centered (i.e., standardize_before_clustering = FALSE), differences in the y-axis range still represent observed log2 fold change differences between samples.
+
+If standardized/Z-scored (i.e., standardize_before_clustering = TRUE), log2-transformed counts are also normalized to unit variance within each row (i.e. row-wise variance reaches 1). A drawback of this transformation is that any subsequent clustering will also pick up common noise patterns of non-DE genes (e.g. batch effects, etc.), since variances of non-DE genes will be equally scaled up to 1, thereby amplifying "noise". I therefore recommend first filtering for genes that show significant (adj. pval < 0.05) differential expression between groups via ANOVA-derived p-values, which can be accomplished by specifying the parameter "ANOVA_filter_before_clustering" and "adj.pval_cutoff" accordingly. For this analysis, the chosen parameters are:
+
+```{r Print chosen clustering parameters}
+
+print(k_clusters)
+print(standardize_before_clustering)
+print(ANOVA_filter_before_clustering)
+print(adj.pval_cutoff)
+
+```
+
+
+```{r Cluster analysis: optimal number of clusters 1, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center"}
+
+## Log2 transform between-sample normalized count matrix and replace NAs with 0
+m <- log2(m_counts_norm + 1)
+m[is.na(m)] <- min(m, na.rm=TRUE)
+  
+ 
+## Before k-means clustering, center log-transformed count matrix to achieve equal row means
+m_norm <- sweep(m, STATS= rowMeans(m), FUN="-", MARGIN = 1)
+m_norm[is.na(m_norm)] <- 0
+  
+
+## If specified, also scale to to unit variance, resulting in gene-wise "Z-scores" (if standardize_before_clustering = TRUE)
+if (standardize_before_clustering){
+  m_norm_clustering <- sweep(m_norm, FUN="/", STAT=apply(m_norm, MARGIN = 1, FUN=sd), MARGIN=1)
+} else {
+  m_norm_clustering <- m_norm
+}
+
+
+## If specified, filter out genes that do not pass ANOVA filter
+if(ANOVA_filter_before_clustering){
+  bool_keep <- df$ANOVA_pval < adj.pval_cutoff
+  m_norm_clustering <- m_norm_clustering[bool_keep,]
+}
+
+```
+
+<br> 
+
+The following plot (often referred to as "Ellbow-plot") can help to find a reasonable/suitable total number of clusters:
+
+```{r Cluster analysis: optimal number of clusters 2, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center"}
+
+## Perform k-means clustering with for each k in k_test clusters, and store within Sum of Squares
+k_test <- 2:20
+N <- nrow(m_norm_clustering)
+within_ss <- numeric(length(k_test))
+names(within_ss) <- k_test
+for (k in k_test){
+  KM_k <- kmeans(m_norm_clustering,k ,iter.max = 10, nstart=10)
+  within_ss[as.character(k)] <- sum(KM_k$withinss)
+}
+  
+  
+## Plot SSwithin vs number of clusters
+writeLines("Residual sum of squares for different k:")
+par(mfrow=c(1,1))
+par(mgp=c(2.5,1,0))
+plot(y=within_ss,x=k_test,cex.main=0.8, cex.main=0.8,yaxt="n", xaxt="n", pch=16, ylab="", xlab="", type="n")
+points(y=within_ss,x=k_test, col="#E69F00", pch=16, cex=1.5)
+lines(y=within_ss,x=k_test, lty = 3)
+axis(side=2, cex.axis=0.6, mgp=c(0,0.7,0), las=2, lwd.ticks=0.5)
+axis(side=1, cex.axis=0.6, mgp=c(0,0.4,0), lwd.ticks=0.5, at=2:20)
+title(ylab="residual sum of squares", xlab="number of clusters (k)")
+
+```
+
+<br> 
+
+Let's investigate the k-means clustering results:
+
+```{r Perform k means clustering, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
+
+## Define number of clusters
+k = k_clusters
+
+
+## Log2 transform between-sample normalized count matrix and replace NAs with 0
+m <- log2(m_counts_norm + 1)
+m[is.na(m)] <- min(m, na.rm=TRUE)
+  
+ 
+## Before k-means clustering, normalize datamatrix to achieve equal rowmeans of 0
+m_norm <- sweep(m, STATS = rowMeans(m), FUN="-", MARGIN = 1) 
+m_norm[is.na(m_norm)] <- 0
+
+
+## If specified, reorder sample order for changes in visual clustering output created below
+if (!is.null(reorder)){
+  m_norm <- m_norm[,reorder]
+  colors_kmeans <- colors_groups[groups][reorder]
+  samplenames_kmeans <- samplenames[reorder]
+} else {
+  colors_kmeans <- colors_groups[groups]
+  samplenames_kmeans <- samplenames
+}
+
+
+## If specified, also scale to to unit variance, resulting in gene-wise "Z-scores" (if standardize_before_clustering = TRUE)
+if (standardize_before_clustering){
+  m_norm_clustering <- sweep(m_norm, FUN="/", STAT=apply(m_norm, MARGIN = 1, FUN=sd), MARGIN=1)
+} else {
+  m_norm_clustering <- m_norm
+}
+
+
+## If specified, filter out genes that do not pass ANOVA filter
+if(ANOVA_filter_before_clustering){
+  bool_keep <- df$ANOVA_pval < adj.pval_cutoff
+  m_norm_clustering <- m_norm_clustering[bool_keep,]
+}
+
+
+## Extract all protein-coding genes (for ORA enrichment analysis) to define statistical background in ORA
+bool_proteincoding <- df[,"gene_biotype"] == proteincoding_entry
+proteincoding_genes_total <- df[bool_proteincoding,"gene_name"]
+
+
+## Perform k-means clustering with k clusters
+KM <- kmeans(m_norm_clustering, k, iter.max = 50, nstart=25)
+centers <- KM$centers
+table_n <- table(KM$cluster)
+par(mgp=c(2.5,1,0))
+
+
+## Add k means cluster column to the dataframe
+if (ANOVA_filter_before_clustering){
+  df$kMeans_cluster_center[bool_keep] <- KM$cluster
+  df$kMeans_cluster_center[!bool_keep] <- 0
+} else {
+  df$kMeans_cluster_center <- KM$cluster
+}
+
+
+## Initiate plot_list (as plotly can not be plotted inside a loop)
+plot_list <- list()
+
+
+## Check if clustering was performed. If yes, plot each cluster and perform ORA. If not, skip.
+if (!is.null(k)){  
+  
+  
+  # first, plot number of genes in each cluster
+  writeLines("Number of genes per cluster:")
+  barplot(table_n, xlab = "cluster ID", ylab="# of genes", border="grey", col="grey")
+  
+  # prepare some margins for plotting
+  par(mar=c(6.5,4.5,4,5))
+  par(mgp=c(3,1,0))
+  if(standardize_before_clustering){
+    min_y <- quantile(m_norm_clustering, probs=0)
+    max_y <- quantile(m_norm_clustering, probs=1)
+  } else {
+    min_y <- quantile(m_norm_clustering, probs=0.00005)
+    max_y <- quantile(m_norm_clustering, probs=0.99995)
+  }
+  x_axis <- 1:ncol(centers)
+
+  
+  
+  # loop over each cluster
+  for (i in 1:k){
+    
+    # print cluster index
+    writeLines(paste0("Cluster ", i, ":"))
+
+    # plot cluster center + individual transcript abundance patterns
+    plot(x_axis, centers[i,], xaxt="n", col=colors_kmeans, pch=16, ylab="", xlab="", ylim=c(min_y,max_y), main=paste0("k-Means Cluster ",i, " (n=", table_n[i], ")"), cex=1.5, yaxt="n", type="n",cex.main=0.9, cex.lab=2)
+    axis(side=1, labels=samplenames_kmeans, at=x_axis, cex.axis=0.65, las=2)
+    axis(side=2, cex.axis=0.8)
+    if(standardize_before_clustering){
+      ylab <- "Z-scored log2 counts"
+    } else {
+      ylab <- "0-centered log2 counts"
+    }
+    title(ylab=ylab, cex.lab=0.9)
+    bool_i <- KM$cluster == i
+    m_norm_i <- m_norm_clustering[bool_i,, drop=FALSE]
+    if (nrow(m_norm_i)==1) next
+    
+    # plot lines of all features
+    for(j in sample(1:nrow(m_norm_i))){
+      lines(x_axis, m_norm_i[j,], xaxt="n", xlab="", ylim=c(min_y,max_y), lty=1, col="black", lwd=0.05)
+    }
+  
+    # plot lines of genes of interest extra if specified
+    if(!is.null(genes_of_special_interest) && any(rownames(m_norm_i) %in% gene_id_genesOfInterest)){
+      ind_interest_i <- which(rownames(m_norm_i) %in% gene_id_genesOfInterest)
+      m_norm_i_interest <- m_norm_i[ind_interest_i,,drop=FALSE]
+      gene_id_genesOfInterest_i <- rownames(m_norm_i_interest)
+      gene_names_genesOfInterest_i <- df$gene_name[df$gene_id %in% gene_id_genesOfInterest_i]
+      for (j in 1:nrow(m_norm_i_interest)){
+        lines(x_axis, m_norm_i_interest[j,], xaxt="n", xlab="n", ylim=c(min_y,max_y), lty=2, lwd=2, col=col_genes[gene_id_genesOfInterest_i[j]])
+      }
+      par(xpd=TRUE)
+      legend("right", legend=gene_names_genesOfInterest_i, col=col_genes[gene_id_genesOfInterest_i], lty=2, lwd=2, bty="n", inset=-0.20, cex=0.7)
+      par(xpd=FALSE)
+    }
+
+    # perform enrichment analysis using gprofiler2 (uses Fisher-Exact test)
+    proteincoding_genes_i <- df$gene_name[df$kMeans_cluster_center==i & df[,"gene_biotype"] == proteincoding_entry]
+    if (enrichment_analysis & length(proteincoding_genes_i) < length(proteincoding_genes_total)/3 & length(proteincoding_genes_i) > 0){
+    
+      # run gost function (on protein coding genes only)
+      query_list_i <- list(proteincoding_genes_i)
+      names(query_list_i) <- paste0("Cluster_",i)
+      if(custom_background){
+        background_list <- proteincoding_genes_total
+        res_gost <- gost(query = query_list_i, 
+                         organism = organism, ordered_query = FALSE, 
+                         multi_query = FALSE, significant = TRUE, exclude_iea = TRUE, 
+                         measure_underrepresentation = FALSE, evcodes = TRUE, 
+                         user_threshold = pval_threshold_enrichment, correction_method = "fdr", 
+                         custom_bg = background_list, domain_scope = "custom", 
+                         numeric_ns = "", sources = sources_enrichment, as_short_link = FALSE)
+      } else {
+        print(i)
+        res_gost <- gost(query = query_list_i, 
+                         organism = organism, ordered_query = FALSE, 
+                         multi_query = FALSE, significant = TRUE, exclude_iea = TRUE, 
+                         measure_underrepresentation = FALSE, evcodes = TRUE, 
+                         user_threshold = pval_threshold_enrichment, correction_method = "fdr", 
+                         custom_bg = NULL, domain_scope = "annotated", 
+                         numeric_ns = "", sources = sources_enrichment, as_short_link = FALSE)
+        print(i)
+      }
+
+      # store ORAS enrichment results as text files
+      wd <- getwd()
+      enrichment_filepath <- paste0(wd, "/ORA")
+      if(!is.null(res_gost)){
+        enrichment_res_i <- res_gost$result
+        names(enrichment_res_i)[names(enrichment_res_i)=="p_value"] <- "adj.p_value" # the default output is misleading! these p-values are already corrected for multiple testing
+        enrichment_res_i <- enrichment_res_i[!sapply(enrichment_res_i, FUN=is.list)]
+        enrichment_res_i$enrichment_factor <- (enrichment_res_i$intersection_size/enrichment_res_i$query_size)/(enrichment_res_i$term_size/enrichment_res_i$effective_domain_size)
+        enrichment_res_i <- enrichment_res_i[,c("term_name", "adj.p_value", "enrichment_factor", "effective_domain_size", "term_size", "query_size", "intersection_size", "term_id", "source", "intersection")]
+        write.table(enrichment_res_i, file=paste0(enrichment_filepath,"/ORA_Results_Cluster",i,".txt"), row.names = FALSE, col.names = TRUE, quote=FALSE, sep = "\t")
+      }
+
+      # save enrichment results of cluster i as plot 
+      if (!is.null(res_gost)){
+        res_gost$result <- res_gost$result %>% filter(intersection_size > 1) %>% filter(term_size < 3000)
+        if(nrow(res_gost$result) == 0){next}
+        p <- gostplot(res_gost, interactive = TRUE, capped=FALSE)
+        plot_list <- list.append(plot_list, ggplotly(p))
+      }
+    }
+  }
+    
+  # create filepath to save gene lists of clusters 
+  wd <- getwd()
+  cluster_filepath <- paste0(wd, "/clusters")
+    
+  # create txt-file with all gene names (serves as reference)
+  write.table(df$gene_name, file=paste0(cluster_filepath, "/Gene_names_all.txt"), row.names = FALSE, col.names = FALSE, quote=FALSE)
+    
+  # create txt-file with gene names for each of the k clusters
+  for (i in 1:k){
+    filepath_k <- paste0(cluster_filepath, "/Gene_names_cluster_", i, ".txt")
+    write.table(df$gene_name[df$kMeans_cluster_center == i], file=filepath_k, row.names = FALSE, col.names = FALSE, quote=FALSE)
+  }
+}
+
+
+```
+
+For each k-means cluster, the feature plots above visualize gene-wise transcript abundance profiles as dashed black lines. Profiles of genes specified as "genes of special interest" (see parameter section) are additionally highlighted in color. 
+
+For further exploration and annotation of gene expression clusters, lists of the genes in each cluster are stored in the folder "clusters" as simple text files. These files can be used as direct input to the STRING webtool (https://string-db.org) for network visualization.
+
+Please note that k-means clustering as performed here will NOT ensure that all genes fit well to their respective cluster. To remedy that, one could remove genes from clusters based on cluster membership (e.g., pearson correlation to cluster center). 
+
+Further, note that there are clustering algorithms that might work better for your data (e.g. correlation clustering using the R package "WGCNA"). However, more complex clustering algorithms might require the specification of many different parameters for optimal results, which in turn complicates automatization (compare with k-means clustering performed here were just a single parameter k needs to be specified). Ultimately, treat the k-means clustering results here with some reservation - they might not be "optimal" but still they facilitate quick and easy data exploration!
+
+<br><br><br>   
+
+
+
+
+# k-Means Clustering: Overrepresentation Analysis (ORA)
+
+In this section, overrepresentation analysis (ORA) is performed for all protein-coding genes within the co-expression clusters inferred above using the gprofiler R package. If the parameter custom_background is set to TRUE (recommended), all quantified protein-coding genes of experiment are defined as the statistical background. If custom_background is set to FALSE, ORA takes the entire annotated genome of the specified organism as a background (which can introduce bias). g:Profiler tests for overrepresentation of specific annotated gene sets via Fisher's Exact Test (FET). 
+These gene sets come from several public databases like GO (Gene Ontology), REAC (Reactome), and WP (WikiPathways).
+
+In the html report, the ORA enrichment analysis returns no visual output for a cluster if the cluster contains more than 1/3 of the total number of quantified protein-coding genes in the experiment (this setting is intentional in order to limit processing time - the bigger the query list, the more time the calculation takes; and usually such big clusters don't feature any enrichment compared to the background). There is also no visual output when the ORA does not return any statistically significant hits. Moreover, gene sets with a term size over 3000 are not displayed (they are often too generic to be very informative), and neither are enrichment terms that produce an intersection set consisting of only a single gene. 
+
+The output plots are reminiscent of Manhatten-plots. The x-axis corresponds to functional terms (i.e. the gene sets) which are grouped and color-coded according to the different database sources of origin. The y-axis displays the significance of gene sets tested for enrichment (i.e., FDR-adjusted p-values). The point size corresponds to the number of genes in the respective gene set. 
+
+Note that the ORA results for each cluster are also saved in table format in the folder "ORA". 
+
+The parameters for this analysis were chosen as:
+
+```{r print chosen enrichment testing parameters 1}
+
+print(enrichment_analysis)
+print(custom_background)
+print(organism)
+print(pval_threshold_enrichment)
+print(sources_enrichment)
+
+```
+
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.height=8, fig.width=4}
+
+## Plot the plots outside a loop
+par(mar=c(1,1,1,1))
+htmltools::tagList(setNames(plot_list, NULL))
+
+
+## Remove unwanted objects
+rm(list=c("bool_i", "bool_keep", "colors_kmeans", "gene_names_genesOfInterest_i", 
+            "gene_id_genesOfInterest_i", "gene_id_genesOfInterest", "ind_interest_i", "j", "k", "k_test", "max_y", "min_y", "proteincoding_genes_i", 
+          "proteincoding_genes_total", "table_n", "within_ss", "x_axis", "ylab", "centers", "enrichment_res_i", "KM", "KM_k", "m", "p", "m_norm", "m_norm_clustering", "m_norm_i", "m_norm_i_interest",
+          "query_list_i", "res_gost", "plot_list", "background_list", "cluster_filepath", "bool_proteincoding", "filepath_k", "N", "samplenames_kmeans"))
+
+```
+
+
+<br><br><br><br>   
+
+
+
+# DE Testing and GSEA
+
+Differential expression (DE) testing between groups is performed using the DESeq2 R package. This package models RNA read counts as negative binomially distributed count data within a generalized linear model setting, and allows for pairwise group comparisons. Batch effects (if specified in the parameter section) will be included as fixed effects into the model (which essentially "regresses out" their influence). The groups to be tested against each other are specified by the parameter "pairwise_comp":
+
+```{r print pairwise comparison settings}
+
+print(pairwise_comp)
+
+```
+
+The section below sequentially goes over each specified pairwise group comparison and visualizes p-value histograms and volcano plots. Note that fold change shrinkage estimation has been performed, which reduces absolute values of fold changes for low-abundance (i.e. high variance genes) and is part of DESeq2's default workflow. DE testing results are added as extra columns to the dataframe which is ultimately exported (see final section).
+
+In addition, for each specified pairwise comparison the gene-wise fold changes are used to conduct gene set enrichment analysis (GSEA) with gene sets from the gene ontology and hallmark databases (both retrieved from MSigDB via the msigdbr R package). For performing and visualizing GSEA results, the R packages ClusterProfiler and enrichplot are employed. GSEA result tables are stored in the folder "GSEA".
+
+```{r DE testing, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
+
+## Check if a pairwise comparison was specified in the parameter section
+plot.new()
+if (!is.null(pairwise_comp)){
+  
+  ## Initiate variables
+  dds_res <- DESeq(dds)
+  
+  
+  ## Go over each specified pairwise comparison to be conducted
+  for (i in 1:length(pairwise_comp)){
+    
+    # extract current pairwise comparison, and print it
+    comp_i <- pairwise_comp[[i]]
+    writeLines(paste0("Pairwise Group Comparison ", i, ":"))
+    print(comp_i)
+    
+    # perform DE testing of pairwise comparison by specification of contrast
+    coef_i <- paste0("group_", comp_i[1], "_vs_", comp_i[2])
+    dds_res_i <- results(dds_res, contrast = c("group", comp_i[1],  comp_i[2]), alpha = 0.05)
+    
+    # print summary
+    writeLines("Results:")
+    summary(dds_res_i)
+    
+    # calculate and plot p-value histograms
+    cat("\n")
+    writeLines("\nHistogram of p-values and adjusted p-values:")
+    ymax = sort(table(cut(dds_res_i$pvalue, breaks=seq(from=0,to=1,length.out = 26))), decreasing = TRUE)[1]
+    par(mfrow=c(2,1))
+    par(mgp=c(1.6, 0.7, 0))
+    par(mar=c(1,4,3,9))
+    hist(dds_res_i$pvalue, breaks=20, border="#999999", col="#999999", xaxt="n", yaxt="n", ylim=c(0,ymax), xlim=c(0,1), main="", ylab="", xlab="")
+    axis(side=2,cex.axis=0.6)
+    axis(side=1, at= seq(0,1,by=0.2), cex.axis=0.6)
+    title(main=paste0("Distribution of p-values\n",comp_i[2], " vs ", comp_i[1]), cex.main=0.7, cex.lab=0.7, ylab="frequency \n (p-values) ")
+    par(mar=c(3,4,1,9))
+    hist(dds_res_i$padj, breaks=20, border="#E69F00", col="#E69F00", xaxt="n", yaxt="n", ylim=c(0,ymax), xlim=c(0,1), main="", ylab="", xlab="")
+    axis(side=2,cex.axis=0.6)
+    axis(side=1, at= seq(0,1,by=0.2), cex.axis=0.6)
+    title(main="", cex.main=0.7, cex.lab=0.7, ylab="frequency \n (adjusted p-values) ")
+    par(mfrow=c(1,1))
+    
+    # calculate FC shrinkage and plot volcano plots
+    dds_res_shrink_i <- lfcShrink(dds_res, contrast = c("group", comp_i[1],  comp_i[2]), type = "ashr")
+    
+    # calculate volcano plot and MA plot variables
+    fc <- dds_res_shrink_i$log2FoldChange
+    neg_log_pval <- -log10(dds_res_shrink_i$pvalue)
+    adj_pval <- dds_res_shrink_i$padj
+    neg_log_adj_pval <- -log10(adj_pval)
+    
+    # make a p-value cap at 10^(-100)
+    neg_log_adj_pval[is.infinite(neg_log_adj_pval)] <- 100
+    neg_log_adj_pval[neg_log_adj_pval>100] <- 100
+    
+    # prepare dataframe for volcano plot  and MA plot 
+    df_gg <- data.frame(fc = fc, neg_log_adj_pval = neg_log_adj_pval)
+    df_gg$neg_log_adj_pval[is.na(df_gg$neg_log_adj_pval)] <- 0
+    df_gg$gene_name <- df$gene_name
+    df_gg$gene_id <- df$gene_id
+    df_gg$significant <- ifelse(test=df_gg$neg_log_adj_pval > -log10(0.05), yes="+", no="-")
+    df_gg$DE_label <- ifelse(test=df_gg$neg_log_adj_pval > -log10(0.05), yes=df_gg$gene_name, no="")
+    df_gg$of_special_interest <- ifelse(df_gg$gene_name %in% genes_of_special_interest, yes="+", no="")
+    df_gg$col_genes <- col_genes[df_gg$gene_id]
+  
+    # plot ggplot highlighting statistically DE genes (adj.pval < 0.05)
+    writeLines("Volcano Plot:")
+    xbound <- max(abs(df_gg$fc), na.rm = TRUE) + 0.1
+    ybound <- max(df_gg$neg_log_adj_pval)*1.05
+    gg1 <- ggplot(df_gg) +
+        geom_point(aes(x=fc,y=neg_log_adj_pval, col=significant)) +
+        scale_color_manual(values=c("grey", "red"), name="p.adj < 0.05") +
+        geom_text_repel(aes(x=fc,y=neg_log_adj_pval, label=DE_label), max.overlaps = 15, force=0.1, size=3.0) +
+        ggtitle(paste0(comp_i[1], " versus ", comp_i[2], "\nHighlight of genes with adj.pval<0.05")) +
+        ylab("adj. p-val [-log10]") + xlab(paste0(comp_i[1], " / ", comp_i[2], " \nfold change [log2]" )) +
+        xlim(-xbound,xbound) + ylim(0,ybound) +
+        theme_bw()+  theme(legend.position="none")
+    print(gg1)
+    
+    # plot ggplot highlighting genes of special interest
+    if(!is.null(genes_of_special_interest) && any(df_gg$gene_name %in% genes_of_special_interest)){
+    xbound <- max(abs(df_gg$fc), na.rm = TRUE) + 0.1
+    ybound <- max(df_gg$neg_log_adj_pval)*1.05
+    gg2 <- ggplot(df_gg[df_gg$of_special_interest=="+",]) +
+        geom_point(data=df_gg, aes(x=fc,y=neg_log_adj_pval), col="grey") +
+        geom_point(aes(x=fc,y=neg_log_adj_pval, col=col_genes)) +
+        scale_color_manual(values=sort(df_gg[df_gg$of_special_interest=="+","col_genes"])) +
+        geom_text_repel(aes(x=fc,y=neg_log_adj_pval, label=DE_label), max.overlaps = 15, force=0.1, size=3.0) +
+        ggtitle(paste0(comp_i[1], " versus ", comp_i[2], "\nHighlight of genes of interest")) +
+        ylab("adj. p-val [-log10]") + xlab(paste0(comp_i[1], " / ", comp_i[2], " \nfold change [log2]" )) +
+        xlim(-xbound,xbound) +  ylim(0,ybound) +
+        theme_bw() + theme(legend.position="none")
+    print(gg2)
+    }
+    
+    # prepare dataframe for GSEA which only includes proteincoding genes
+    writeLines("Performing Gene Set Enrichment Analysis (GSEA) based on fold change estimates.")
+    df_gsea <- data.frame(gene_id = df$gene_id,
+                          gene_name = df$gene_name,
+                          rank = dds_res_shrink_i$log2FoldChange,
+                          gene_biotype = df$gene_biotype)
+    df_gsea <- df_gsea[df_gsea$gene_biotype == proteincoding_entry,]
+
+    # now rename DE testing results and add to df. Remove unwanted objects
+    names_res <- names(dds_res_shrink_i)
+    newnames_res <- paste0(names_res, "__", coef_i)
+    names(dds_res_shrink_i) <- newnames_res
+    df <- cbind(df, dds_res_shrink_i)
+    rm(list=c("gg1","gg2", "df_gg"))
+    
+    # calculate ranking for GSEA. Then sort
+    ranked_query_list <- setNames(df_gsea$rank, nm=df_gsea$gene_name)
+    ranked_query_list <- sort(ranked_query_list, decreasing = TRUE)
+
+    # specify species parameter for msigdb
+    if (organism == "mmusculus") {species_gsea = "Mus musculus"}
+    if (organism == "hsapiens") {species_gsea = "Homo sapiens"}
+    if (!organism %in% c("mmusculus", "hsapiens")){
+      writeLines("Skipping GSEA because organism not supported")
+      next()
+    }
+    
+    # retrieve gene lists for which GSEA enrichment testing should be conducted
+    df_msig_hallmark <- msigdbr(species = species_gsea, category = "H") %>%   # extract mouse hallmark gene sets (as entrez IDs)
+      dplyr::select(gs_name, gene_symbol) %>% as.data.frame()
+    df_msig_go <-  msigdbr(species = species_gsea, category = "C5") %>% filter(gs_subcat %in% c("GO:BP", "GO:CC", "GO:MF")) %>% 
+      dplyr::select(gs_name, gene_symbol) %>% as.data.frame()
+    df_geneSets <- rbind(df_msig_hallmark, df_msig_go)
+    
+    # perform GSEA and save results table
+    gsea_res <- GSEA(geneList = ranked_query_list, TERM2GENE = df_geneSets)
+    df_gsea_res <- gsea_res@result 
+    filename_table <- paste0("GSEA/GSEA_Results_", coef_i,".txt")
+    write.table(x=df_gsea_res,filename_table, col.names =TRUE, row.names = FALSE, quote=FALSE, sep="\t")
+    
+    # report how many gene sets were found enriched at either side via GSEA
+    writeLines(paste0("Total number of significantly enriched gene sets (adj.pval < 0.05): ",  nrow(df_gsea_res)))
+    writeLines(paste0("Among them..."))
+    writeLines(paste0("number of upregulated gene sets (NES>0): ", nrow(df_gsea_res[df_gsea_res$NES>0,])))
+    writeLines(paste0("number of downregulated gene sets (NES<0): ", nrow(df_gsea_res[df_gsea_res$NES<0,])))
+    writeLines("Upgregulated means that genes have predominantly positive log2 fold changes, thus NES>0.")
+    writeLines("Downregulated means that genes have predominantly negative log2 fold changes, thus NES<0.\n")
+    
+    # plot dotplot for top upregulated genes 
+    writeLines("Dotplot of top upregulated gene sets:")
+    df_gsea_res_dysreg <- df_gsea_res %>% filter(NES > 0)
+    if (nrow(df_gsea_res_dysreg) >0){
+      df_gsea_res_dysreg$ID_mod <- df_gsea_res_dysreg$ID %>% gsub(., pattern="[_]", replacement=" ")
+      ind_break <- gregexpr(df_gsea_res_dysreg$ID_mod, pattern=" ") %>% sapply(., FUN=function(x){
+        ind_words_halved <- round(length(x)/2)
+        if (ind_words_halved>0){
+          return(as.numeric(x[ind_words_halved]))
+        } else {
+          return(1)
+        }
+      })
+      df_gsea_res_dysreg$ID_mod <- ifelse(!is.na(ind_break) & ind_break>25, yes=paste0(substring(df_gsea_res_dysreg$ID_mod, 0, ind_break), "\n", substring(df_gsea_res_dysreg$ID_mod,ind_break, 100000)), no=df_gsea_res_dysreg$ID_mod)
+      df_gsea_res_dysreg$leading_edge_Percent <- substring(df_gsea_res_dysreg$leading_edge, first=regexpr(df_gsea_res_dysreg$leading_edge, pattern="=") +1, last=regexpr(df_gsea_res_dysreg$leading_edge, pattern="%")-1) %>% as.numeric()
+      df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$leading_edge_Percent, decreasing = TRUE),]
+      df_gsea_res_dysreg$ID_mod <- factor(df_gsea_res_dysreg$ID_mod, levels=rev(df_gsea_res_dysreg$ID_mod))
+      df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$p.adjust),]
+      gg <- ggplot(data=df_gsea_res_dysreg[1:pmin(15, nrow(df_gsea_res_dysreg)),]) +
+                geom_point(aes(x=leading_edge_Percent, y=ID_mod, col=p.adjust, size=setSize)) +
+                theme_bw() + scale_color_gradient(low = "#CF6C67", high = "#457AB3", limits=c(0,0.05)) + ylab("Gene set name") + xlab("Leading edge percentage") + ggtitle(paste0("Top Upregulated (NES>0)\n", coef_i))
+      print(gg)
+    }
+    
+    # plot enrichment map for top upregulated genes
+    writeLines("Enrichment map of top upregulated gene sets:")
+    gsea_res_up <- gsea_res
+    gsea_res_up@result <- gsea_res_up@result[gsea_res_up@result$NES>0,]
+    if (nrow(gsea_res_up@result)>1){
+      term_sim <- pairwise_termsim(gsea_res_up)
+      emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Upregulated (NES>0)\n", coef_i))
+      print(emaplot_GO)
+    }
+    
+    # plot dotplot for top downregulated genes 
+    writeLines("Dotplot of top downregulated gene sets:")
+    df_gsea_res_dysreg <- df_gsea_res %>% filter(NES < 0)
+    if (nrow(df_gsea_res_dysreg) >0){
+      df_gsea_res_dysreg$ID_mod <- df_gsea_res_dysreg$ID %>% gsub(., pattern="[_]", replacement=" ")
+      ind_break <- gregexpr(df_gsea_res_dysreg$ID_mod, pattern=" ") %>% sapply(., FUN=function(x){
+        ind_words_halved <- round(length(x)/2)
+        if (ind_words_halved>0){
+          return(as.numeric(x[ind_words_halved]))
+        } else {
+          return(1)
+        }
+      })
+      df_gsea_res_dysreg$ID_mod <- ifelse(!is.na(ind_break) & ind_break>25, yes=paste0(substring(df_gsea_res_dysreg$ID_mod, 0, ind_break), "\n", substring(df_gsea_res_dysreg$ID_mod,ind_break, 100000)), no=df_gsea_res_dysreg$ID_mod)
+      df_gsea_res_dysreg$leading_edge_Percent <- substring(df_gsea_res_dysreg$leading_edge, first=regexpr(df_gsea_res_dysreg$leading_edge, pattern="=") +1, last=regexpr(df_gsea_res_dysreg$leading_edge, pattern="%")-1) %>% as.numeric()
+      df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$leading_edge_Percent, decreasing = TRUE),]
+      df_gsea_res_dysreg$ID_mod <- factor(df_gsea_res_dysreg$ID_mod, levels=rev(df_gsea_res_dysreg$ID_mod))
+      df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$p.adjust),]
+      gg <- ggplot(data=df_gsea_res_dysreg[1:pmin(15, nrow(df_gsea_res_dysreg)),]) +
+                geom_point(aes(x=leading_edge_Percent, y=ID_mod, col=p.adjust, size=setSize)) +
+                theme_bw() + scale_color_gradient(low = "#CF6C67", high = "#457AB3", limits=c(0,0.05)) + ylab("Gene set name") + xlab("Leading edge percentage") + ggtitle(paste0("Top Downregulated (NES<0)\n", coef_i))
+      print(gg)
+    }
+    
+    # plot enrichment map for top downregulated genes
+    writeLines("Enrichment map of top downregulated gene sets:")
+    gsea_res_down <- gsea_res
+    gsea_res_down@result <- gsea_res_down@result[gsea_res_down@result$NES<0,]
+    if (nrow(gsea_res_down@result)>1){
+      term_sim <- pairwise_termsim(gsea_res_down)
+      emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Downregulated (NES<0)\n", coef_i))
+      print(emaplot_GO)
+    }
+    plot.new()
+    
+    # remove unwanted objects
+    rm(list=c("coef_i", "dds_res_i", "dds_res_shrink_i", "df_geneSets", "df_gsea", "df_gsea_res",
+               "df_gsea_res_dysreg", "df_msig_go", "df_msig_hallmark","emaplot_GO", "gg", "gsea_res", "gsea_res_down", "gsea_res_up", "term_sim",
+               "comp_i", "fc", "filename_table", "ind_break", "names_res", "neg_log_adj_pval", "neg_log_pval", "newnames_res",
+               "xbound", "ymax"))
+    gc()
+    
+  }
+}
+
+```
+
+
+
+# Export Table
+
+Finally, the filtered and normalized data is exported and named "Table_Export_[CURRENT DATE].txt". The exported table contains all DE testing results + k-means cluster information as additional columns.
+
+While generating the html report, all created figures were stored in the folder "figures" and are available in both png and pdf file format. Enrichment testing result tables (ORA and GSEA) were stored in the folders "ORA" and "GSEA", respectively. 
+
+```{r Export table, echo = FALSE, message = FALSE, warning = FALSE}
+
+## export as tab separated text file
+if (export_table){
+  write.table(df, file = paste0("Table_Export_", Sys.Date(), ".txt"), sep = "\t", col.names = TRUE, row.names=FALSE, quote=FALSE)
+  # print info about export matrix:
+  writeLines("Generated output txt file file called:")
+  writeLines(paste0("Table_Export_", Sys.Date(), ".txt"))
+  writeLines(paste0("(",dim(df)[1], " rows, ", dim(df)[2], " columns)" ))
+}  
+  
+```
+
+
+<br><br><br><br><br> 
+
+
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
