@@ -1,5 +1,5 @@
 # BulkRNAseqAnalysis_from_countMatrix
-R Markdown script to perform standard analysis steps for bulk RNA-seq raw count matrices.  Analysis steps include: Adding biomaRt annotation, filtering and QC, normalization, general visualization (PCA, heatmaps), k-means clustering + ORA, differential expression testing via DESeq2 + subsequent enrichment testing via GSEA, and finally data export as text file and the generation of an html report.
+R Markdown script to perform standard analysis steps for bulk RNA-seq raw count matrices.  Analysis steps include: Adding biomaRt annotation, filtering and QC, normalization, general visualization (PCA, heatmaps), k-means clustering + ORA, differential expression testing via DESeq2 + subsequent enrichment testing via GSEA, and finally export of results as text file and html report.
 Check out the example report "DemoDataset_FullAnalysisReport.html" to see what the script can do!
 
 
