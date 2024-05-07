@@ -74,6 +74,22 @@ other attached packages:
 
 
 
+## Used Libraries and other Resources
+
+- DESeq2: Anders, S. & Huber, W. Differential expression analysis for sequence count data. Genome Biol. 11, R106 (2010).
+
+- gProfiler: Reimand J. g:Profiler--a web-based toolset for functional profiling of gene lists from large-scale experiments. Nucleic Acids Res. (2007).
+
+- msigdbr: Liberzon, A. et al. The Molecular Signatures Database Hallmark Gene Set Collection. Cell Syst. 1, 417–425 (2015).
+
+- biomaRt: Durinck S, Spellman P, Birney E, Huber W . Mapping identifiers for the integration of genomic datasets with the R/Bioconductor package biomaRt. Nature Protocols, 4, 1184–1191 (2009).
+
+- clusterProfiler: Yu, G., Wang, L. G., Han, Y. & He, Q. Y. ClusterProfiler: An R package for comparing biological themes among gene clusters. Omi. A J. Integr. Biol. 16, 284–287 (2012).
+
+- ggplot2: Wickham H. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York (2016).
+
+
+
 
 
 
