@@ -1,7 +1,9 @@
 # BulkRNAseqAnalysis_from_countMatrix
-R Markdown script to perform standard bioinformatic analysis steps for RNA-seq raw count matrices, compiled to a html or pdf report.  Analysis steps include: Adding biomaRt annotation based on Ensembl gene IDs, filtering and QC, normalization, visual overview (PCA, heatmaps), k-means clustering + ORA (overrepresentation analysis), differential expression testing via DESeq2 + subsequent enrichment testing via GSEA (gene set enrichment analysis), and finally dataframe export as text file as well as the generation of an html analysis report.
-To inspect an example analysis report created by this script, check out the file "ExampleAnalysisReport_Demo.html" (or alternatively "ExampleAnalysisReport_Demo.pdf" which comes without the interactive plots), which is obtained by running the script on a demo dataset ("DemoDataset.txt").
+This repository centers around an R Markdown program/script to perform standard bioinformatic analysis steps for RNA-seq raw count matrices and ultimately compile the results to a html or pdf report.  Analysis steps include: Adding biomaRt annotation based on Ensembl gene IDs, filtering and QC, normalization, visual overview (PCA, heatmaps), k-means clustering + ORA (overrepresentation analysis), differential expression testing via DESeq2 + subsequent enrichment testing via GSEA (gene set enrichment analysis), and finally dataframe export as text file as well as the generation of an html analysis report.
+A full example analysis report is available as "ExampleAnalysisReport_Demo.html" (or alternatively "ExampleAnalysisReport_Demo.pdf" which comes without the interactive plots), which is obtained by running the script on a demo dataset ("DemoDataset.txt"). Here are a few snapshots:
 
+
+![Screenshot](img/DemoFigures.png)
 
 ## Contents
 
