@@ -1,12 +1,17 @@
 # BulkRNAseqAnalysis_from_countMatrix
+<<<<<<< HEAD
 R Markdown script to perform standard bioinformatic analysis steps for RNA-seq raw count matrices, compiled to a html or pdf report.  Analysis steps include: Adding biomaRt annotation based on Ensembl gene IDs, filtering and QC, normalization, visual overview (PCA, heatmaps), k-means clustering + ORA (overrepresentation analysis), differential expression testing via DESeq2 + subsequent enrichment testing via GSEA (gene set enrichment analysis), and finally dataframe export as text file as well as the generation of an html analysis report.
 To inspect an example analysis report created by this script, check out the file "ExampleAnalysisReport_Demo.html" (or alternatively "ExampleAnalysisReport_Demo.pdf" which comes without the interactive plots), which is obtained by running the script on a demo dataset ("DemoDataset.txt").
+=======
+R Markdown script to perform standard analysis steps for bulk RNA-seq raw count matrices.  Analysis steps include: Adding biomaRt annotation, filtering and QC, normalization, general visualization (PCA, heatmaps), k-means clustering + ORA, differential expression testing via DESeq2 + subsequent enrichment testing via GSEA, and finally export of results as text file and html report.
+Check out the example report "DemoDataset_FullAnalysisReport.html" to see what the script can do!
+>>>>>>> 20dd802189f547fdc9d899b36f7d36bd6ac5df0e
 
 
 ## Contents
 
 
-- **BulkRNAseqAnalysis_from_CountMatrix.Rmd** : R markdown script that performs the analysis based on specified input parameters (see code section "Chosen Parameters" in the Rmd file). Knit to html to obtain an html report of your analysis. The current parameter configuration is set to fully support the demo dataset (see below). 
+- **BulkRNAseqAnalysis_from_CountMatrix.Rmd** : R markdown script that performs the analysis based on specified input parameters (see section "Chosen Parameters" in the Rmd file). Knit to html to obtain an html report of your analysis. The current parameter configuration is set to fully support the demo dataset (see below). 
 
 - **functions.R** : Functions required for the script (sourced automatically if located in the same folder).
 
