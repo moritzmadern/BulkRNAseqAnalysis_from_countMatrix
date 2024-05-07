@@ -36,7 +36,7 @@ A full example analysis report is available as "ExampleAnalysisReport_Demo.html"
 
 ## Acknowledgements
 
-- The demo dataset (from a bulk RNAseq experiment of Rinl KO vs WT in naive and effector CD4+ T-cells, PMID: 37703004) was kindly provided by Lisa Sandner and Nicole Boucheron from the Institute of Immunology (IFI), Medical University of Vienna. 
+- The demo dataset was kindly provided by Lisa Sandner and Nicole Boucheron from the Institute of Immunology (IFI), Medical University of Vienna. The data is from a bulk RNAseq experiment of Rinl KO vs WT in naive and effector CD4+ T-cells, and has been published as part of a larger project (PMID: 37703004).
 
 
 
