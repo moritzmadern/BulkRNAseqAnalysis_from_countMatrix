@@ -281,7 +281,7 @@ colors_groups <- colors_groups[!bool_kick]
 
 
 ## Give a unique color to each gene
-f_genes <- colorRampPalette(c("darkslateblue","blue","red","darkorchid","aquamarine","lightgreen","navy","turquoise","forestgreen","skyblue","plum","dodgerblue2","darkseagreen2", "cadetblue4", "chocolate", "bisque", "gold", "deeppink", "dodgerblue4", "indianred4", "indianred1", "lightsalmon1", "midnightblue", "mediumblue", "orange1", "mediumpurple3", "red3", "rosybrown2", "turquoise2", "wheat2", "slateblue2", "royalblue2", "purple2", "deeppink4", "firebrick", "coral", "tomato2", "#ff073a", "#06ffcb", "#00725a", "#610043", "#0024c3","#c30024", "#e94b3c", "#e94b3c", "#9becf3", "#9af3cd", "#cc9af2", "#d9a583", "#F0C013"))
+f_genes <- colorRampPalette(c("darkslateblue","blue","red","darkorchid","aquamarine","navy","turquoise","forestgreen","skyblue","plum","dodgerblue2","darkseagreen2", "cadetblue4", "chocolate", "bisque", "gold", "deeppink", "dodgerblue4", "indianred4", "indianred1", "lightsalmon1", "midnightblue", "mediumblue", "orange1", "mediumpurple3", "red3", "rosybrown2", "turquoise2", "wheat2", "slateblue2", "royalblue2", "purple2", "deeppink4", "firebrick", "coral", "tomato2", "#06ffcb", "#00725a", "#610043", "#0024c3","#c30024", "#e94b3c", "#9becf3", "#cc9af2", "#d9a583", "#F0C013", "lightblue", "hotpink","hotpink4","yellow", "yellowgreen","royalblue4","magenta", "magenta4","tan4", "khaki"))
 col_genes <- sample(f_genes(length(df$gene_id)))
 names(col_genes) <- df$gene_id
 df$col_genes <- col_genes
@@ -891,6 +891,7 @@ In addition, for each specified pairwise comparison the gene-wise fold changes a
 ```{r DE testing, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.path='figures/', dev=c('png', 'pdf')}
 
 ## Check if a pairwise comparison was specified in the parameter section
+set.seed(12345)
 plot.new()
 if (!is.null(pairwise_comp)){
   
@@ -985,6 +986,7 @@ if (!is.null(pairwise_comp)){
     print(gg2)
     }
     
+    
     # prepare dataframe for GSEA which only includes proteincoding genes
     writeLines("Performing Gene Set Enrichment Analysis (GSEA) based on fold change estimates.")
     df_gsea <- data.frame(gene_id = df$gene_id,
@@ -1033,74 +1035,77 @@ if (!is.null(pairwise_comp)){
     writeLines("Upgregulated means that genes have predominantly positive log2 fold changes, thus NES>0.")
     writeLines("Downregulated means that genes have predominantly negative log2 fold changes, thus NES<0.\n")
     
+    
     # plot dotplot for top upregulated genes 
-    writeLines("Dotplot of top upregulated gene sets:")
     df_gsea_res_dysreg <- df_gsea_res %>% filter(NES > 0)
-    if (nrow(df_gsea_res_dysreg) >0){
-      df_gsea_res_dysreg$ID_mod <- df_gsea_res_dysreg$ID %>% gsub(., pattern="[_]", replacement=" ")
-      ind_break <- gregexpr(df_gsea_res_dysreg$ID_mod, pattern=" ") %>% sapply(., FUN=function(x){
-        ind_words_halved <- round(length(x)/2)
-        if (ind_words_halved>0){
-          return(as.numeric(x[ind_words_halved]))
-        } else {
-          return(1)
-        }
-      })
-      df_gsea_res_dysreg$ID_mod <- ifelse(!is.na(ind_break) & ind_break>25, yes=paste0(substring(df_gsea_res_dysreg$ID_mod, 0, ind_break), "\n", substring(df_gsea_res_dysreg$ID_mod,ind_break, 100000)), no=df_gsea_res_dysreg$ID_mod)
-      df_gsea_res_dysreg$leading_edge_Percent <- substring(df_gsea_res_dysreg$leading_edge, first=regexpr(df_gsea_res_dysreg$leading_edge, pattern="=") +1, last=regexpr(df_gsea_res_dysreg$leading_edge, pattern="%")-1) %>% as.numeric()
-      df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$leading_edge_Percent, decreasing = TRUE),]
-      df_gsea_res_dysreg$ID_mod <- factor(df_gsea_res_dysreg$ID_mod, levels=rev(df_gsea_res_dysreg$ID_mod))
-      df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$p.adjust),]
-      gg <- ggplot(data=df_gsea_res_dysreg[1:pmin(15, nrow(df_gsea_res_dysreg)),]) +
-                geom_point(aes(x=leading_edge_Percent, y=ID_mod, col=p.adjust, size=setSize)) +
-                theme_bw() + scale_color_gradient(low = "#CF6C67", high = "#457AB3", limits=c(0,0.05)) + ylab("Gene set name") + xlab("Leading edge percentage") + ggtitle(paste0("Top Upregulated (NES>0)\n", coef_i))
-      print(gg)
+    if (nrow(df_gsea_res_dysreg) > 0){
+      writeLines("Dotplot of top upregulated gene sets:")
+      if (nrow(df_gsea_res_dysreg) >0){
+        df_gsea_res_dysreg$ID_mod <- df_gsea_res_dysreg$ID %>% gsub(., pattern="[_]", replacement=" ")
+        ind_break <- gregexpr(df_gsea_res_dysreg$ID_mod, pattern=" ") %>% sapply(., FUN=function(x){
+          ind_words_halved <- round(length(x)/2)
+          if (ind_words_halved>0){
+            return(as.numeric(x[ind_words_halved]))
+          } else {
+            return(1)
+          }
+        })
+        df_gsea_res_dysreg$ID_mod <- ifelse(!is.na(ind_break) & ind_break>25, yes=paste0(substring(df_gsea_res_dysreg$ID_mod, 0, ind_break), "\n", substring(df_gsea_res_dysreg$ID_mod,ind_break, 100000)), no=df_gsea_res_dysreg$ID_mod)
+        df_gsea_res_dysreg$leading_edge_Percent <- substring(df_gsea_res_dysreg$leading_edge, first=regexpr(df_gsea_res_dysreg$leading_edge, pattern="=") +1, last=regexpr(df_gsea_res_dysreg$leading_edge, pattern="%")-1) %>% as.numeric()
+        df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$leading_edge_Percent, decreasing = TRUE),]
+        df_gsea_res_dysreg$ID_mod <- factor(df_gsea_res_dysreg$ID_mod, levels=rev(df_gsea_res_dysreg$ID_mod))
+        df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$p.adjust),]
+        gg <- ggplot(data=df_gsea_res_dysreg[1:pmin(15, nrow(df_gsea_res_dysreg)),]) +
+                  geom_point(aes(x=leading_edge_Percent, y=ID_mod, col=p.adjust, size=setSize)) +
+                  theme_bw() + scale_color_gradient(low = "#CF6C67", high = "#457AB3", limits=c(0,0.05)) + ylab("Gene set name") + xlab("Leading edge percentage") + ggtitle(paste0("Top Upregulated (NES>0)\n", coef_i))
+        print(gg)
+      }
+      
+      # plot enrichment map for top upregulated genes
+      writeLines("Enrichment map of top upregulated gene sets:")
+      gsea_res_up <- gsea_res
+      gsea_res_up@result <- gsea_res_up@result[gsea_res_up@result$NES>0,]
+        term_sim <- pairwise_termsim(gsea_res_up)
+        emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Upregulated (NES>0)\n", coef_i))
+        print(emaplot_GO)
     }
     
-    # plot enrichment map for top upregulated genes
-    writeLines("Enrichment map of top upregulated gene sets:")
-    gsea_res_up <- gsea_res
-    gsea_res_up@result <- gsea_res_up@result[gsea_res_up@result$NES>0,]
-    if (nrow(gsea_res_up@result)>1){
-      term_sim <- pairwise_termsim(gsea_res_up)
-      emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Upregulated (NES>0)\n", coef_i))
-      print(emaplot_GO)
-    }
     
     # plot dotplot for top downregulated genes 
-    writeLines("Dotplot of top downregulated gene sets:")
     df_gsea_res_dysreg <- df_gsea_res %>% filter(NES < 0)
-    if (nrow(df_gsea_res_dysreg) >0){
-      df_gsea_res_dysreg$ID_mod <- df_gsea_res_dysreg$ID %>% gsub(., pattern="[_]", replacement=" ")
-      ind_break <- gregexpr(df_gsea_res_dysreg$ID_mod, pattern=" ") %>% sapply(., FUN=function(x){
-        ind_words_halved <- round(length(x)/2)
-        if (ind_words_halved>0){
-          return(as.numeric(x[ind_words_halved]))
-        } else {
-          return(1)
-        }
-      })
-      df_gsea_res_dysreg$ID_mod <- ifelse(!is.na(ind_break) & ind_break>25, yes=paste0(substring(df_gsea_res_dysreg$ID_mod, 0, ind_break), "\n", substring(df_gsea_res_dysreg$ID_mod,ind_break, 100000)), no=df_gsea_res_dysreg$ID_mod)
-      df_gsea_res_dysreg$leading_edge_Percent <- substring(df_gsea_res_dysreg$leading_edge, first=regexpr(df_gsea_res_dysreg$leading_edge, pattern="=") +1, last=regexpr(df_gsea_res_dysreg$leading_edge, pattern="%")-1) %>% as.numeric()
-      df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$leading_edge_Percent, decreasing = TRUE),]
-      df_gsea_res_dysreg$ID_mod <- factor(df_gsea_res_dysreg$ID_mod, levels=rev(df_gsea_res_dysreg$ID_mod))
-      df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$p.adjust),]
-      gg <- ggplot(data=df_gsea_res_dysreg[1:pmin(15, nrow(df_gsea_res_dysreg)),]) +
-                geom_point(aes(x=leading_edge_Percent, y=ID_mod, col=p.adjust, size=setSize)) +
-                theme_bw() + scale_color_gradient(low = "#CF6C67", high = "#457AB3", limits=c(0,0.05)) + ylab("Gene set name") + xlab("Leading edge percentage") + ggtitle(paste0("Top Downregulated (NES<0)\n", coef_i))
-      print(gg)
-    }
-    
-    # plot enrichment map for top downregulated genes
-    writeLines("Enrichment map of top downregulated gene sets:")
-    gsea_res_down <- gsea_res
-    gsea_res_down@result <- gsea_res_down@result[gsea_res_down@result$NES<0,]
-    if (nrow(gsea_res_down@result)>1){
-      term_sim <- pairwise_termsim(gsea_res_down)
-      emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Downregulated (NES<0)\n", coef_i))
-      print(emaplot_GO)
+    if (nrow(df_gsea_res_dysreg) > 0){
+      writeLines("Dotplot of top downregulated gene sets:")
+      if (nrow(df_gsea_res_dysreg) >0){
+        df_gsea_res_dysreg$ID_mod <- df_gsea_res_dysreg$ID %>% gsub(., pattern="[_]", replacement=" ")
+        ind_break <- gregexpr(df_gsea_res_dysreg$ID_mod, pattern=" ") %>% sapply(., FUN=function(x){
+          ind_words_halved <- round(length(x)/2)
+          if (ind_words_halved>0){
+            return(as.numeric(x[ind_words_halved]))
+          } else {
+            return(1)
+          }
+        })
+        df_gsea_res_dysreg$ID_mod <- ifelse(!is.na(ind_break) & ind_break>25, yes=paste0(substring(df_gsea_res_dysreg$ID_mod, 0, ind_break), "\n", substring(df_gsea_res_dysreg$ID_mod,ind_break, 100000)), no=df_gsea_res_dysreg$ID_mod)
+        df_gsea_res_dysreg$leading_edge_Percent <- substring(df_gsea_res_dysreg$leading_edge, first=regexpr(df_gsea_res_dysreg$leading_edge, pattern="=") +1, last=regexpr(df_gsea_res_dysreg$leading_edge, pattern="%")-1) %>% as.numeric()
+        df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$leading_edge_Percent, decreasing = TRUE),]
+        df_gsea_res_dysreg$ID_mod <- factor(df_gsea_res_dysreg$ID_mod, levels=rev(df_gsea_res_dysreg$ID_mod))
+        df_gsea_res_dysreg <- df_gsea_res_dysreg[order(df_gsea_res_dysreg$p.adjust),]
+        gg <- ggplot(data=df_gsea_res_dysreg[1:pmin(15, nrow(df_gsea_res_dysreg)),]) +
+                  geom_point(aes(x=leading_edge_Percent, y=ID_mod, col=p.adjust, size=setSize)) +
+                  theme_bw() + scale_color_gradient(low = "#CF6C67", high = "#457AB3", limits=c(0,0.05)) + ylab("Gene set name") + xlab("Leading edge percentage") + ggtitle(paste0("Top Downregulated (NES<0)\n", coef_i))
+        print(gg)
+      }
+      
+      # plot enrichment map for top downregulated genes
+      writeLines("Enrichment map of top downregulated gene sets:")
+      gsea_res_down <- gsea_res
+      gsea_res_down@result <- gsea_res_down@result[gsea_res_down@result$NES<0,]
+        term_sim <- pairwise_termsim(gsea_res_down)
+        emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Downregulated (NES<0)\n", coef_i))
+        print(emaplot_GO)
     }
     plot.new()
+    
     
     # remove unwanted objects
     rm(list=c("coef_i", "dds_res_i", "dds_res_shrink_i", "df_geneSets", "df_gsea", "df_gsea_res",

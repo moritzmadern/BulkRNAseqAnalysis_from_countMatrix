@@ -1,6 +1,6 @@
 # BulkRNAseqAnalysis_from_countMatrix
-R Markdown script to perform standard analysis steps for bulk RNA-seq raw count matrices.  Analysis steps include: Adding biomaRt annotation, filtering and QC, normalization, general visualization (PCA, heatmaps), k-means clustering + ORA, differential expression testing via DESeq2 + subsequent enrichment testing via GSEA, and finally data export as text file and the generation of an html report.
-Check out the example report "DemoDataset_FullAnalysisReport.html" to see what the script can do!
+R Markdown script to perform standard bioinformatic analysis steps for RNA-seq raw count matrices, compiled to a html or pdf report.  Analysis steps include: Adding biomaRt annotation based on Ensembl gene IDs, filtering and QC, normalization, visual overview (PCA, heatmaps), k-means clustering + ORA (overrepresentation analysis), differential expression testing via DESeq2 + subsequent enrichment testing via GSEA (gene set enrichment analysis), and finally dataframe export as text file as well as the generation of an html analysis report.
+To inspect an example analysis report created by this script, check out the file "ExampleAnalysisReport_Demo.html" (or alternatively "ExampleAnalysisReport_Demo.pdf" which comes without the interactive plots), which is obtained by running the script on a demo dataset ("DemoDataset.txt").
 
 
 ## Contents
@@ -8,30 +8,33 @@ Check out the example report "DemoDataset_FullAnalysisReport.html" to see what t
 
 - **BulkRNAseqAnalysis_from_CountMatrix.Rmd** : R markdown script that performs the analysis based on specified input parameters (see code section "Chosen Parameters" in the Rmd file). Knit to html to obtain an html report of your analysis. The current parameter configuration is set to fully support the demo dataset (see below). 
 
-- **functions.R** : Functions required for the BulkRNAseqAnalysis_from_CountMatrix.Rmd script (sourced automatically if located in the same folder).
+- **functions.R** : Functions required for the script (sourced automatically if located in the same folder).
 
-- **DemoDataset.txt** : This file contains a raw count matrix and serves as the demo dataset for this repository. The parameters in BulkRNAseqAnalysis_from_CountMatrix.Rmd are already set to support the entire analysis of this dataset.
+- **DemoDataset.txt** : A raw count matrix that serves as the demo dataset so that anyone can explore the script. The parameters in BulkRNAseqAnalysis_from_CountMatrix.Rmd are already set to support the entire analysis of this dataset.
 
-- **DemoDataset_FullAnalysisReport.html** : The analysis report that is generated when running the script on the demo dataset. Check it out!
+- **ExampleAnalysisReport_Demo.html** : The analysis report that is generated when running the script on the demo dataset. Check it out!
+
+- **ExampleAnalysisReport_Demo.pdf** : The exact same analysis report but as pdf file, and therefore without the interactive plots. 
+
 
 
 
 ## Required Data Input 
 
-- A tab-separated raw read count matrix. Assumed to contain one count column for each unique sample, and a column with Ensembl gene IDs.
+- A tab-separated raw read count matrix  with rows corresponding to individual genes. The table is required to contain the following columns: a) a separate column of read counts for each unique sample, and b) a column containing  Ensembl gene IDs.
 
 
 
 ## Data Output
 
-- A html report created when knitting the BulkRNAseqAnalysis_from_CountMatrix.Rmd file (see "DemoDataset_FullAnalysisReport.html" as an example).
+- An interactive html report created when knitting the BulkRNAseqAnalysis_from_CountMatrix.Rmd file to  html file (see "ExampleAnalysisReport_Demo.html" or "ExampleAnalysisReport_Demo.pdf" as an example).
 - Various figures and output tables that are generated when running the script. For more info, refer to the html report.
 
 
 
 ## Acknowledgements
 
-- The demo dataset (Rinl KO vs WT in naive and effector CD4+ T cells) was kindly provided by Lisa Sandner and Nicole Boucheron from the Institute of Immunology (IFI), Medical University of Vienna. PMID: 37703004
+- The demo dataset (from a bulk RNAseq experiment of Rinl KO vs WT in naive and effector CD4+ T-cells, PMID: 37703004) was kindly provided by Lisa Sandner and Nicole Boucheron from the Institute of Immunology (IFI), Medical University of Vienna. 
 
 
 
