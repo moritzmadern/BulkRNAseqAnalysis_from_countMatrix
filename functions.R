@@ -93,7 +93,11 @@ heatmap_plot <- function(m, groups, legend_colors, sample_names, type="normal", 
   }
   
   # create color palette
-  heatmap_pal <- colorRampPalette(rev(brewer.pal(11, "RdBu")))
+  colors_heatmap <- rev(brewer.pal(11, "RdBu"))
+  colors_heatmap[6] <- "#fffec8"
+  heatmap_pal <- colorRampPalette(colors_heatmap)
+  rdbu_colors = heatmap_pal(20)[2:19]
+  heatmap_pal <- colorRampPalette(rdbu_colors)
   
   # plot heatmap
   colors_pal <- colorRampPalette(pals::parula(40))
