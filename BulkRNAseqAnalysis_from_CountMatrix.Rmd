@@ -55,7 +55,7 @@ unique_id = "gene_id"
 gene_name = NULL
 
 
-## Specifiy the column name that indicates whether a gene is protein coding or not, if present. If not present, set this parameter is set to NULL (i.e. biotype_name = NULL), and biotypes will be extracted based on ENSEMBL gene ids via biomaRt
+## Specifiy the column name that indicates whether a gene is protein coding or not (via entry "protein_coding"), if present. If not present, set this parameter is set to NULL (i.e. biotype_name = NULL), and biotypes will be extracted based on ENSEMBL gene ids via biomaRt
 biotype_name = NULL
 
 
@@ -78,7 +78,7 @@ groups = rep(c("KO_effector","WT_naive","WT_effector", "KO_naive"), each=3)
 batch = NULL
   
 
-## Optional: Specify sample reordering indices as numerical vector. This parameter reorders samples for visualization purposes, e.g. clustering gene progiles. If not desired, set this parameter to NULL
+## Optional: Specify sample reordering indices as numerical vector. This parameter reorders samples for visualization purposes, e.g. clustering gene profiles. If not desired, set this parameter to NULL
 reorder = c(4,5,6,10,11,12,7,8,9,1,2,3)
 
 
@@ -413,7 +413,7 @@ If normalized properly, we expect most genes to fall around the dashed line, esp
 
 <br>  
 
-This section shows PCA and Heatmaps of the normalized  and log2(x+1)-transformed data. Note that the data is not batch-corrected at this point, meaning that potential batch-effects would therefore be visible here. Also, the PCA plot is interactive in the html output! Hover over points to retrieve sample-specific information.
+This section shows PCAs (PC1 vs PC2; PC1 vs PC3) and Heatmaps of the normalized and log2(x+1)-transformed data. Note that the data is not batch-corrected at this point, meaning that potential batch-effects would therefore be visible here. Also, the PCA plots are interactive in the html output! Hover over points to retrieve sample-specific information.
 
 ```{r PCA, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center", fig.width=6, fig.height=4, fig.path='figures/'}
 
@@ -422,11 +422,18 @@ writeLines("PCA dimension reduction of log2-transformed counts (normalized):")
 PCA_plot(m=log2(m_counts_norm + 1),
          groups = groups,
          legend_colors = colors_groups,
-         batch=NULL,
-         plot_path = paste0(wd,"/figures/PCA.pdf"))
+         batch=batch,
+         plot_path = paste0(wd,"/figures/PCA_comp1vscomp2.pdf"))
+
+PCA_plot(m=log2(m_counts_norm + 1),
+         groups = groups,
+         legend_colors = colors_groups,
+         batch=batch,
+         plot_path = paste0(wd,"/figures/PCA_comp1vscomp3.pdf"),
+         comp1=1, comp2=3)
+
 
 ```
-
 
 <br>  
 

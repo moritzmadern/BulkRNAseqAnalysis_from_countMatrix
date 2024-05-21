@@ -3,8 +3,8 @@
 
 
 
-### PCA plot function ###
-PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL){
+
+PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL, comp1=1, comp2=2){
   
   # replace NAs with 0
   m[is.na(m)] <- 0
@@ -14,8 +14,8 @@ PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL){
   rot_mat <- pca_res$rotation
   res_final <- as.matrix(scale(t(m), center=TRUE, scale=FALSE)) %*% rot_mat
   eigenv <- pca_res$sdev^2
-  fraction_var_pca1 <- round(eigenv[1]/sum(eigenv),digits=3)
-  fraction_var_pca2 <- round(eigenv[2]/sum(eigenv),digits=3)
+  fraction_var_pca1 <- round(eigenv[comp1]/sum(eigenv),digits=3)
+  fraction_var_pca2 <- round(eigenv[comp2]/sum(eigenv),digits=3)
   
   ## create groups
   groups <- as.factor(groups)
@@ -28,10 +28,10 @@ PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL){
     df_gg$samplenames <- samplenames
     df_gg$groups <- groups
     gg <- ggplot(df_gg) + 
-      geom_point(aes(x=PC1, y=PC2, col=groups, text=samplenames),size=5) +
+      geom_point(aes(x=res_final[,comp1], y=res_final[,comp2], col=groups, text=samplenames),size=5) +
       scale_color_manual(values=legend_colors)+
-      xlab(paste0("PC1  ","(",fraction_var_pca1*100,"%",")")) +
-      ylab(paste0("PC2  ","(",fraction_var_pca2*100,"%",")")) +
+      xlab(paste0("PC",comp1, " (",fraction_var_pca1*100,"%",")")) +
+      ylab(paste0("PC", comp2,   " (",fraction_var_pca2*100,"%",")")) +
       theme_bw()
   } else {
     df_gg <- as.data.frame(res_final)
@@ -39,10 +39,10 @@ PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL){
     df_gg$groups <- groups
     df_gg$batch <- as.factor(batch)
     gg <- ggplot(df_gg) + 
-      geom_point(aes(x=PC1, y=PC2, col=groups, text=samplenames, shape=batch),size=5) +
+      geom_point(aes(x=res_final[,comp1], y=res_final[,comp2], col=groups, text=samplenames, shape=batch),size=5) +
       scale_color_manual(values=legend_colors)+
-      xlab(paste0("PC1  ","(",fraction_var_pca1*100,"%",")")) +
-      ylab(paste0("PC2  ","(",fraction_var_pca2*100,"%",")")) +
+      xlab(paste0("PC",comp1, " (",fraction_var_pca1*100,"%",")")) +
+      ylab(paste0("PC", comp2,   " (",fraction_var_pca2*100,"%",")")) 
       theme_bw()
   }
   
@@ -53,6 +53,9 @@ PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL){
   ggplotly(gg)
   
 }
+
+
+
 
 
 
