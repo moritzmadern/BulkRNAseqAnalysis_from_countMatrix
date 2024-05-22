@@ -42,7 +42,7 @@ PCA_plot <- function(m, groups, batch, legend_colors, plot_path=NULL, comp1=1, c
       geom_point(aes(x=res_final[,comp1], y=res_final[,comp2], col=groups, text=samplenames, shape=batch),size=5) +
       scale_color_manual(values=legend_colors)+
       xlab(paste0("PC",comp1, " (",fraction_var_pca1*100,"%",")")) +
-      ylab(paste0("PC", comp2,   " (",fraction_var_pca2*100,"%",")")) 
+      ylab(paste0("PC", comp2,   " (",fraction_var_pca2*100,"%",")")) +
       theme_bw()
   }
   
