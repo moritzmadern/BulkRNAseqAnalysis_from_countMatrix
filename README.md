@@ -34,6 +34,12 @@ An example analysis report is available as the html file "ExampleAnalysisReport_
 
 
 
+## Things to Note:
+
+- Please note that for the sake of automatization, this workflow only allows for simple contrasts via DESeq2. In other words, the workflow supports only simple pairwise group comparisons (i.e., H0: group A average - group B average = 0) while accounting for batch effects. For more complex contrasts with multiple factors and interaction effects, the code needs to be modified accordingly.
+
+
+
 ## Acknowledgements
 
 - The demo dataset was kindly provided by Lisa Sandner and Nicole Boucheron from the Institute of Immunology (IFI), Medical University of Vienna. The data is from a bulk RNAseq experiment of Rinl KO vs WT in naive and effector CD4+ T-cells, and has been published as part of a larger project (PMID: 37703004).
@@ -89,6 +95,8 @@ other attached packages:
 - ggplot2: Wickham H. ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York (2016).
 
 
+
+## Used Libraries and other Resources
 
 
 
