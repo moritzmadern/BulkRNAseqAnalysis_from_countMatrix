@@ -941,7 +941,7 @@ if (!is.null(pairwise_comp)){
     par(mfrow=c(1,1))
     
     # calculate FC shrinkage and plot volcano plots
-    dds_res_shrink_i <- lfcShrink(dds_res, contrast = c("group", comp_i[1],  comp_i[2]), type = "ashr")
+    dds_res_shrink_i <- lfcShrink(dds_res, contrast = c("group", comp_i[1],  comp_i[2]), type = "normal")
     
     # calculate volcano plot and MA plot variables
     fc <- dds_res_shrink_i$log2FoldChange
@@ -1072,9 +1072,15 @@ if (!is.null(pairwise_comp)){
       writeLines("Enrichment map of top upregulated gene sets:")
       gsea_res_up <- gsea_res
       gsea_res_up@result <- gsea_res_up@result[gsea_res_up@result$NES>0,]
-        term_sim <- pairwise_termsim(gsea_res_up)
-        emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Upregulated (NES>0)\n", coef_i))
-        print(emaplot_GO)
+      term_sim <- pairwise_termsim(gsea_res_up)
+      emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Upregulated (NES>0)\n", coef_i))
+      print(emaplot_GO)
+      writeLines("GSEA plot(s) of top upregulated gene sets:")  
+      for (g in 1:pmin(5, nrow(gsea_res_up@result))){
+        p <- gseaplot2(gsea_res_up, geneSetID = g, 
+                           title=paste0(comp_i[1]," vs. ",comp_i[2], "\n",gsea_res_up@result$ID[g],"\n", "(adj. pval = ",gsea_res_up@result$p.adjust[g]," ,NES = ", round(gsea_res_up@result$NES[g], digit=2) ,")"))
+        print(p)
+      }  
     }
     
     
@@ -1107,9 +1113,15 @@ if (!is.null(pairwise_comp)){
       writeLines("Enrichment map of top downregulated gene sets:")
       gsea_res_down <- gsea_res
       gsea_res_down@result <- gsea_res_down@result[gsea_res_down@result$NES<0,]
-        term_sim <- pairwise_termsim(gsea_res_down)
-        emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Downregulated (NES<0)\n", coef_i))
-        print(emaplot_GO)
+      term_sim <- pairwise_termsim(gsea_res_down)
+      emaplot_GO <- emapplot(term_sim, cex_label_goup=0.9, cex_label_category=0.5, showCategory=20) + ggtitle(paste0("Top Downregulated (NES<0)\n", coef_i))
+      print(emaplot_GO)
+      writeLines("GSEA plot(s) of top downregulated gene sets:")
+      for (g in 1:pmin(5, nrow(gsea_res_down@result))){
+        p <- gseaplot2(gsea_res_down, geneSetID = g, 
+                           title=paste0(comp_i[1]," vs. ",comp_i[2], "\n",gsea_res_down@result$ID[g],"\n", "(adj. pval = ",gsea_res_down@result$p.adjust[g]," ,NES = ", round(gsea_res_down@result$NES[g], digit=2) ,")"))
+        print(p)
+      }  
     }
     plot.new()
     
