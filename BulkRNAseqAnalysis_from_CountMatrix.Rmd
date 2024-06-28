@@ -941,7 +941,7 @@ if (!is.null(pairwise_comp)){
     par(mfrow=c(1,1))
     
     # calculate FC shrinkage and plot volcano plots
-    dds_res_shrink_i <- lfcShrink(dds_res, contrast = c("group", comp_i[1],  comp_i[2]), type = "normal")
+    dds_res_shrink_i <- lfcShrink(dds_res, contrast = c("group", comp_i[1],  comp_i[2]), type = "ashr")
     
     # calculate volcano plot and MA plot variables
     fc <- dds_res_shrink_i$log2FoldChange
