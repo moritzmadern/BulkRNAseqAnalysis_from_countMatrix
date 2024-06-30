@@ -32,6 +32,7 @@ library(msigdbr)
 library(clusterProfiler)
 library(viridis)
 library(enrichplot)
+library(corrplot)
 
 ```
 <br><br><br>   
@@ -386,6 +387,12 @@ my_line <- function(x,y,...){
     points(x,y,pch=16, col=rgb(red=200, green=200, blue=200, alpha=50, maxColorValue = 255),
            xlim=range_pairs,ylim=range_pairs, cex=1)
     abline(a = 0,b = 1, col="black", lty="dashed")}
+
+
+## Correlation plot 
+writeLines("Plot sample-sample correlation matrix of log2-transformed counts (normalized):")
+corr_mat <- cor(log2(m_counts_norm + 1))
+corrplot(corr_mat, method = "color", col.lim = c(min(corr_mat),1), is.corr=FALSE, tl.col = "black")
 
 
 ## Plot pairs plot (max 7vs7)
